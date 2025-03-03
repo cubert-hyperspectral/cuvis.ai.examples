@@ -310,7 +310,6 @@ class EfficientAdModel(nn.Module):
             in_channels: int = 6,
             use_imgNet_penalty: bool = False,
             proc_mode: str = None,
-            use_AE: bool = True,  # TODO: implement
     ) -> None:
         super().__init__()
         self.proc_mode = proc_mode
@@ -354,7 +353,6 @@ class EfficientAdModel(nn.Module):
             },
         )
         self.use_imgNet_penalty = use_imgNet_penalty
-        self.use_AE = use_AE
 
     @staticmethod
     def is_set(p_dic: nn.ParameterDict) -> bool:

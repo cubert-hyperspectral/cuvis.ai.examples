@@ -41,7 +41,6 @@ class EfficientADCuvisDataSet(Dataset):
             self.gt = {}
             for file_path in self.file_paths:
                 if "_ok_ok_" not in file_path:
-                    # TODO: refactor this
                     self.gt[file_path] = file_path.replace(".cu3s", "_mask.png").replace("test", "ground_truth")
 
         self.transform = v2.Compose([
