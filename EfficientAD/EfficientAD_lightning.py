@@ -13,7 +13,7 @@ from EfficientAD_torch_model import EfficientAdModel
 from torchvision.transforms.functional import equalize
 
 
-def reduce_tensor_elems(tensor: torch.Tensor, m: int = 2**24) -> torch.Tensor:
+def reduce_tensor_elems(tensor: torch.Tensor, m: int = 2 ** 24) -> torch.Tensor:
     """Reduce tensor elements.
 
     This function flatten n-dimensional tensors,  selects m elements from it
@@ -38,16 +38,17 @@ def reduce_tensor_elems(tensor: torch.Tensor, m: int = 2**24) -> torch.Tensor:
         tensor = tensor[idx]
     return tensor
 
+
 class EfficientAD_lightning(L.LightningModule):
     def __init__(self, config):
         super().__init__()
         self.config = config
         self.model_size = config['Model']['model_size']
         self.channel_size = config['Model']['channel_size']
-        self.learning_rate = config['learning_rate']
-        self.weight_decay = config['weight_decay']
+        self.learning_rate = config['learning_rate'] if 'learning_rate' in config else 1e-4
+        self.weight_decay = config['weight_decay'] if 'weight_decay' in config else 1e-5
         self.in_channels = config['Model']['in_channels']
-        self.model = EfficientAdModel(384, in_channels=self.in_channels , model_size=config["Model"]["model_size"], use_imgNet_penalty=config["Model"]["use_imgNet_penalty"])
+        self.model = EfficientAdModel(384, in_channels=self.in_channels, model_size=config["Model"]["model_size"], use_imgNet_penalty=config["Model"]["use_imgNet_penalty"])
         self.student = self.model.student
         self.student = self.student.cuda()
         self.teacher = self.model.teacher
@@ -57,14 +58,10 @@ class EfficientAD_lightning(L.LightningModule):
         self.labels = []
         self.scores = []
         self.ae = self.ae.cuda()
-        self.resize = config['Model']['input_size']
-        self.score_in_mid_size = int(0.9 * self.resize)
-        self.fmap_size = (self.resize, self.resize)
         self.channel_mean, self.channel_std = None, None
         self.batch_size = config['Model']['batch_size']
         if config["seed"] != "random":
             self.set_seed(config['seed'])
-        self.training_steps = config['Model']['iterations']
         self.training = True
         self.save_hyperparameters()
         # Metrics
@@ -93,6 +90,7 @@ class EfficientAD_lightning(L.LightningModule):
         self.images_logged = []
 
     def training_step(self, batch, batch_idx):
+        """Train the model for one step."""
         loss_st, loss_ae, loss_stae = self.model.forward(batch['image'], batch['imgNet_img'])
         loss_total = loss_st + loss_ae + loss_stae
         self.log("train/st", loss_st.item(), on_epoch=True, prog_bar=True)
@@ -157,36 +155,37 @@ class EfficientAD_lightning(L.LightningModule):
         # Image Logging
         image = batch['image'].detach().squeeze().cpu()
         pred = amap.detach().squeeze().cpu()
-
-        image = np.transpose(np.transpose(image,(1,2,0)) * np.array(self.config["std"]) + np.array(self.config["mean"]), (2,0,1))
-        if self.current_epoch == 0 and  label.item() == 1 and len(self.images_logged) < 4 and batch["defect"] not in self.images_logged: # and gt_mask.max() > 0:  # Just once
+        # reverte the normalization of the images to display the input image correctly
+        image = np.transpose(np.transpose(image, (1, 2, 0)) * np.array(self.config["std"]) + np.array(self.config["mean"]), (2, 0, 1))
+        if self.current_epoch == 0 and label.item() == 1 and len(self.images_logged) < 4 and batch["defect"] not in self.images_logged:  # and gt_mask.max() > 0:  # Just once
             if self.in_channels == 6:
 
-                self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/0_rgb', image[:3].cpu().numpy())
-                self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/1_ir',  image[3:].cpu().numpy())
+                self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/0_rgb', image[:3].numpy())
+                self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/1_ir', image[3:].numpy())
             else:
-                self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/0_rgb', image.cpu().numpy())
-        if self.current_epoch % 2 == 0 and label.item() == 1 and len(self.images_logged) < 4 and batch["defect"] not in self.images_logged: # and gt_mask.max() > 0:  # Every 10 epochs
+                self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/0_rgb', image.numpy())
+        if self.current_epoch % 2 == 0 and label.item() == 1 and len(self.images_logged) < 4 and batch["defect"] not in self.images_logged:  # and gt_mask.max() > 0:  # Every 10 epochs
             self.images_logged.append(batch["defect"])
             gt_mask = gt_mask.squeeze().cpu()
 
-            masks_only = { f'image{batch_idx}_{batch["defect"]}/mask_t/t={t:.1f}': (pred > t).unsqueeze(0).numpy() for t in [0.1, 0.2, 0.3, 0.4, 0.5] }
+            masks_only = {f'image{batch_idx}_{batch["defect"]}/mask_t/t={t:.1f}': (pred > t).unsqueeze(0).numpy() for t in [0.1, 0.2, 0.3, 0.4, 0.5]}
             masks_quant = {f'image{batch_idx}_{batch["defect"]}/mask_q/q={q:.2f}': (pred > pred.quantile(q)).unsqueeze(0).numpy() for q in [0.9, 0.95, 0.98, 0.99]}
             eq_map = equalize((255.0 * (pred[None] - pred.min()) / (pred.max() - pred.min())).to(torch.uint8))
             self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/pred_equalized', eq_map.numpy(), global_step=self.global_step)
-            self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/2_pred_raw',pred.unsqueeze(0).numpy(), global_step=self.global_step)
-            self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/3_pred_st',map_st.detach().squeeze(0).cpu().numpy(), global_step=self.global_step)
-            self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/5_pred_ae',map_ae.detach().squeeze(0).cpu().numpy(), global_step=self.global_step)
+            self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/2_pred_raw', pred.unsqueeze(0).numpy(), global_step=self.global_step)
+            self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/3_pred_st', map_st.detach().squeeze(0).cpu().numpy(), global_step=self.global_step)
+            self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/5_pred_ae', map_ae.detach().squeeze(0).cpu().numpy(), global_step=self.global_step)
             self.logger.experiment.add_image(f'image{batch_idx}_{batch["defect"]}/4_gt_mask', gt_mask.unsqueeze(0).numpy(), global_step=self.global_step)
-            for k,v in masks_quant.items():
+            for k, v in masks_quant.items():
                 self.logger.experiment.add_image(k, v, global_step=self.global_step)
 
-            for k,v in masks_only.items():
+            for k, v in masks_only.items():
                 self.logger.experiment.add_image(k, v, global_step=self.global_step)
 
         return res["anomaly_map"]
 
     def on_validation_epoch_end(self) -> None:
+        """Called after every validation epoch. Logs all accumulated data and clears buffers."""
         self.log('val_im/AU-ROC', self.auroc, on_epoch=True, prog_bar=True)
         self.log('val_im/AP', self.ap, on_epoch=True)
         self.log('val_im/Acc_0.1', self.acc1, on_epoch=True)
@@ -246,9 +245,10 @@ class EfficientAD_lightning(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(itertools.chain(self.student.parameters(),
-                                         self.ae.parameters()),
-                         lr=self.learning_rate, weight_decay=self.weight_decay)
+                                                     self.ae.parameters()),
+                                     lr=self.learning_rate, weight_decay=self.weight_decay)
         return optimizer
+
     def _get_quantiles_of_maps(self, maps: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
         """Calculate 90% and 99.5% quantiles of the given anomaly maps.
 
@@ -266,6 +266,7 @@ class EfficientAD_lightning(L.LightningModule):
         qa = torch.quantile(maps_flat, q=0.9).to(self.device)
         qb = torch.quantile(maps_flat, q=0.995).to(self.device)
         return qa, qb
+
     def load_pretrain_teacher(self):
         self.teacher.load_state_dict(torch.load(self.config["Model"]["checkpoints"]))
         self.teacher = self.teacher.cuda()
@@ -273,20 +274,21 @@ class EfficientAD_lightning(L.LightningModule):
         for parameters in self.teacher.parameters():
             parameters.requires_grad = False
 
-
     def set_seed(self, seed):
         torch.manual_seed(seed)
         np.random.seed(seed)
         random.seed(seed)
 
     def forward(self, image):
-        res = self.model.forward(image["image"])
+        res = self.model.forward(image["image"], return_all_maps=True)
         res["mask"] = image["mask"]
         res["label"] = image["label"]
         return res
-    def on_train_start(self) ->None:
+
+    def on_train_start(self) -> None:
         channel_mean_std = self.teacher_channel_mean_std(self.trainer.train_dataloader)
         self.model.mean_std.update(channel_mean_std)
+
     @torch.no_grad()
     def teacher_channel_mean_std(self, dataloader: DataLoader) -> dict[str, torch.Tensor]:
         """Calculate channel-wise mean and std of teacher model activations.

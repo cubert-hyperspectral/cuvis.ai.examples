@@ -13,12 +13,28 @@ from pathlib import Path
 
 
 class EfficientADCuvisDataSet(Dataset):
-    def __init__(self, path: str = "data/cubes", proc_mode: int = 4, size: tuple[int] = (256, 256), mode: str = "train", imageNet_path: str = "../data/ImageNet_6_channel",
-                 imageNet_file_ending: str = '.npy', in_channels: int = 6, mean: list = None, std: list = None, normalize: bool = True, max_img_shape: int = 1500):
+    """
+    Dataset class to use the cuvis dataset with the EfficientAD model.
+    """
+
+    def __init__(self, path: str = "data/cubes", mode: str = "train", imageNet_path: str = "../data/ImageNet_6_channel",
+                 imageNet_file_ending: str = '.npy', in_channels: int = 6, mean: list = None, std: list = None, normalize: bool = True, max_img_shape: int = 1500, white_percentage: float = 0.55,
+                 channels: str = "ALL"):
+        """
+        :param path: Path to the session files. These must contain data cubes which are expected to be in reflectance mode. default: 'data/cubes'
+        :param mode: Mode for which this dataset will be used. If this is 'train' the data will be prepared for training, otherwise it will fit the validation / inference process. default: 'train'
+        :param imageNet_path: Path to the imageNet files needed for training. default: '../data/ImageNet_6_channel'
+        :param imageNet_file_ending: File extension of the specified ImageNet dataset, either '.npy' or '.jpeg'. default: '.npy'
+        :param in_channels: Number of input channels to the model. default: '6'
+        :param mean: List of means for each channel of the input dataset. default: None
+        :param std: List of standard deviations for each channel of the input dataset. default: None
+        :param normalize: Whether to normalize the input data. default: True
+        :param max_img_shape: Maximum length of an image side: default: 1500
+        :param white_percentage: Diffuse reflectance of the white target used as reference for the reflectance calculation. default: 0.55
+        :param channels: Which channels of the datacube to use. This can be 'RGB', 'SWIR' or 'ALL'. default: 'ALL'
+        """
         self.path = path
-        self.size = size
         self.mode = mode
-        self.proc_mode = proc_mode
         self.imageNet_file_ending = imageNet_file_ending
         self.imageNet_path = imageNet_path
         self.file_paths = [
@@ -59,13 +75,20 @@ class EfficientADCuvisDataSet(Dataset):
         self.std = std
         self.max_img_shape = max_img_shape
         self.normalize = normalize
+        self.white_percentage = white_percentage
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, idx):
+        """
+        Gets and prepares the next item for the training loop.
+        :param idx: index of the item to get
+        :return: dict either containing the cube and an imageNet image for training or cube, label, mask and which defect is shown for validation / inference
+        """
         file_path = self.images[idx][0]
         sess = cuvis.SessionFile(file_path)
         mesu = sess.get_measurement(self.images[idx][1])
+
         if "cube" not in mesu.data:
             if self.proc is None:
                 # create processing context only once if there are session files without cubes
@@ -74,18 +97,17 @@ class EfficientADCuvisDataSet(Dataset):
 
             mesu = self.proc.apply(mesu)
         cube = mesu.data["cube"].array
-        if self.normalize:
-            cube = (cube - self.mean) / self.std
+        cube = cube[300:-300, 300:-300,:] # cut the border of the image to exclude the tray borders
         cube = np.transpose(cube, (2, 0, 1))  # transpose from H x W x C to C x H x W for torch
-        cube = cube.astype(np.float32)
-        if self.in_channels == 3:
-            cube = cube[[2, 1, 0]]
-        else:
-            # BGR -> RGB
-            cube = cube[[2, 1, 0, 3, 4, 5]]
+        cube = torch.from_numpy(cube)
+        if self.white_percentage != 1:
+            cube = cube * self.white_percentage
+        cube = cube / 10000  # 100% reflectance equals 10.000, we divide by that to make 100% reflectance equal 1
+        if self.normalize:
+            cube = torchvision.transforms.Normalize(mean=self.mean, std=self.std)(cube)
         if cube.shape[1] > self.max_img_shape or cube.shape[2] > self.max_img_shape:
-            cube = torch.from_numpy(cube)
             cube = torchvision.transforms.Resize(size=self.max_img_shape - 1, max_size=self.max_img_shape)(cube)
+
         if self.mode == "train":
 
             if self.imageNet_file_ending == ".npy":

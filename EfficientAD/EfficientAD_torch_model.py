@@ -13,14 +13,12 @@ from torch.nn import functional as F  # noqa: N812
 
 logger = logging.getLogger(__name__)
 
-def reshape_if_nessecary(x: torch.Tensor, channels: int, proc_mode: str = None) -> torch.Tensor:
+def reshape_if_nessecary(x: torch.Tensor) -> torch.Tensor:
     """
     unsqueezes the tensor in case it only has a length of 3
     Parameters
     ----------
     x
-    channels
-    proc_mode
 
     Returns
     -------
@@ -70,9 +68,10 @@ class SmallPatchDescriptionNetwork(nn.Module):
         out_channels (int): number of convolution output channels
         padding (bool): use padding in convoluional layers
             Defaults to ``False``.
+        in_channels(int): number of input channels
     """
 
-    def __init__(self, out_channels: int, padding: bool = False, in_channels: int = 6, proc_mode: str = None) -> None:
+    def __init__(self, out_channels: int, padding: bool = False, in_channels: int = 6) -> None:
         super().__init__()
         pad_mult = 1 if padding else 0
         self.conv1 = nn.Conv2d(
@@ -88,7 +87,6 @@ class SmallPatchDescriptionNetwork(nn.Module):
         self.avgpool2 = nn.AvgPool2d(
             kernel_size=2, stride=2, padding=1 * pad_mult)
         self.in_channels = in_channels
-        self.proc_mode = proc_mode
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the network.
@@ -116,9 +114,10 @@ class MediumPatchDescriptionNetwork(nn.Module):
         out_channels (int): number of convolution output channels
         padding (bool): use padding in convoluional layers
             Defaults to ``False``.
+        in_channels(int): number of input channels
     """
 
-    def __init__(self, out_channels: int, padding: bool = False, in_channels: int = 6, proc_mode: str = None) -> None:
+    def __init__(self, out_channels: int, padding: bool = False, in_channels: int = 6) -> None:
         super().__init__()
         pad_mult = 1 if padding else 0
         self.conv1 = nn.Conv2d(in_channels, 256, kernel_size=4, stride=1, padding=3 * pad_mult)
@@ -130,7 +129,7 @@ class MediumPatchDescriptionNetwork(nn.Module):
         self.avgpool1 = nn.AvgPool2d(kernel_size=2, stride=2, padding=1 * pad_mult)
         self.avgpool2 = nn.AvgPool2d(kernel_size=2, stride=2, padding=1 * pad_mult)
         self.in_channels = in_channels
-        self.proc_mode = proc_mode
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the network.
@@ -155,7 +154,11 @@ class MediumPatchDescriptionNetwork(nn.Module):
 
 
 class Encoder(nn.Module):
-    """Autoencoder Encoder model."""
+    """Autoencoder Encoder model.
+
+    Args:
+          in_channels(int): number of input channels
+    """
 
     def __init__(self, in_channels: int = 6) -> None:
         super().__init__()
@@ -190,6 +193,7 @@ class Decoder(nn.Module):
     Args:
         out_channels (int): number of convolution output channels
         padding (int): use padding in convoluional layers
+        in_channels(int): number of input channels
     """
 
     def __init__(self, out_channels: int, padding: int, *args, **kwargs) -> None:
@@ -263,6 +267,7 @@ class AutoEncoder(nn.Module):
     Args:
        out_channels (int): number of convolution output channels
        padding (int): use padding in convoluional layers
+       in_channels(int): number of input channels
     """
 
     def __init__(self, out_channels: int, padding: int, in_channels: int = 6, *args, **kwargs) -> None:
@@ -299,6 +304,8 @@ class EfficientAdModel(nn.Module):
         pad_maps (bool): relevant if padding is set to False. In this case, pad_maps = True pads the
             output anomaly maps so that their size matches the size in the padding = True case.
             Defaults to ``True``.
+        in_channels(int): number of input channels
+        use_imgNet_penalty(bool): weather to use the imgNet penalty in training
     """
 
     def __init__(
@@ -309,25 +316,23 @@ class EfficientAdModel(nn.Module):
             pad_maps: bool = True,
             in_channels: int = 6,
             use_imgNet_penalty: bool = False,
-            proc_mode: str = None,
     ) -> None:
         super().__init__()
-        self.proc_mode = proc_mode
         self.pad_maps = pad_maps
         self.teacher: MediumPatchDescriptionNetwork | SmallPatchDescriptionNetwork
         self.student: MediumPatchDescriptionNetwork | SmallPatchDescriptionNetwork
 
         if model_size == EfficientAdModelSize.M:
             self.teacher = MediumPatchDescriptionNetwork(
-                out_channels=teacher_out_channels, padding=padding, in_channels=in_channels, proc_mode=self.proc_mode).eval()
+                out_channels=teacher_out_channels, padding=padding, in_channels=in_channels).eval()
             self.student = MediumPatchDescriptionNetwork(
-                out_channels=teacher_out_channels * 2, padding=padding, in_channels=in_channels, proc_mode=self.proc_mode)
+                out_channels=teacher_out_channels * 2, padding=padding, in_channels=in_channels)
 
         elif model_size == EfficientAdModelSize.S:
             self.teacher = SmallPatchDescriptionNetwork(
-                out_channels=teacher_out_channels, padding=padding, in_channels=in_channels, proc_mode=self.proc_mode).eval()
+                out_channels=teacher_out_channels, padding=padding, in_channels=in_channels).eval()
             self.student = SmallPatchDescriptionNetwork(
-                out_channels=teacher_out_channels * 2, padding=padding, in_channels=in_channels, proc_mode=self.proc_mode)
+                out_channels=teacher_out_channels * 2, padding=padding, in_channels=in_channels)
 
         else:
             msg = f"Unknown model size {model_size}"
@@ -371,7 +376,7 @@ class EfficientAdModel(nn.Module):
             batch: torch.Tensor,
             batch_imagenet: torch.Tensor | None = None,
             normalize: bool = True,
-            return_all_maps:bool = False,
+            return_all_maps: bool = False,
     ) -> torch.Tensor | dict:
         """Perform the forward-pass of the EfficientAd models.
 
@@ -379,6 +384,7 @@ class EfficientAdModel(nn.Module):
             batch (torch.Tensor): Input images.
             batch_imagenet (torch.Tensor): ImageNet batch. Defaults to None.
             normalize (bool): Normalize anomaly maps or not
+            return_all_maps(bool): weather to return all three maps or only the combined anomaly map.
 
         Returns:
             Tensor: Predictions
@@ -440,7 +446,7 @@ class EfficientAdModel(nn.Module):
             map_st = 0.1 * (map_st - self.quantiles["qa_st"]) / (self.quantiles["qb_st"] - self.quantiles["qa_st"])
             map_stae = 0.1 * (map_stae - self.quantiles["qa_ae"]) / (self.quantiles["qb_ae"] - self.quantiles["qa_ae"])
 
-        map_combined = 0.5 * map_st + 0.5 * map_stae
+        map_combined = map_st #0.5 * map_st + 0.5 * map_stae
         if return_all_maps:
             return {"anomaly_map": map_combined, "map_st": map_st, "map_ae": map_stae}
         else:

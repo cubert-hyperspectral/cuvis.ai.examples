@@ -22,33 +22,36 @@ def parse_args(args):
 
 
 def train(config):
-    size = (config['Model']['input_size'], config['Model']['input_size'])
     train_data = EfficientADCuvisDataSet(config["Datasets"]["train"]["root"],
                                          mode="train",
-                                         size=size,
                                          imageNet_path=config["Datasets"]["imagenet"]["root"],
                                          imageNet_file_ending=config["Datasets"]["imagenet"]["file_ending"],
                                          mean=config["mean"],
                                          std=config["std"],
-                                         max_img_shape = config["max_img_shape"])
+                                         normalize=config["normalize"],
+                                         max_img_shape=config["max_img_shape"],
+                                         white_percentage=config["white_percentage"],
+                                         channels=config["channels"])
 
-    train_loader = DataLoader(train_data, batch_size=config["Model"]["batch_size"], shuffle=True)
+    train_loader = DataLoader(train_data, batch_size=config["Model"]["batch_size"], shuffle=True, num_workers=4, persistent_workers=True)
 
     test_data = EfficientADCuvisDataSet(config["Datasets"]["eval"]["root"],
                                         mode="test",
-                                        size=size,
                                         imageNet_path=config["Datasets"]["imagenet"]["root"],
                                         imageNet_file_ending=config["Datasets"]["imagenet"]["file_ending"],
                                         mean=config["mean"],
                                         std=config["std"],
-                                        max_img_shape=config["max_img_shape"])
+                                        normalize=config["normalize"],
+                                        max_img_shape=config["max_img_shape"],
+                                        white_percentage=config["white_percentage"],
+                                        channels=config["channels"])
 
-    test_loader = DataLoader(test_data, batch_size=config["Model"]["batch_size"], shuffle=True)
+    test_loader = DataLoader(test_data, batch_size=config["Model"]["batch_size"], shuffle=False)
 
-    # create custom callback to save a model checkpoint for every epoch instead only the last one
+    # create custom callback to save a model checkpoint for every epoch
     checkpoint_callback = ModelCheckpoint(
         monitor="val_im/AU-ROC",  # Metric to monitor
-        dirpath= config["ckpt_dir"] + "/" + config["name"],  # Directory to save checkpoints
+        dirpath=config["ckpt_dir"] + "/" + config["name"],  # Directory to save checkpoints
         filename=config["name"] + "-{epoch:02d}-{val_im/AU-ROC:.2f}",  # Filename format
         save_top_k=-1,  # Save all checkpoints
         mode="max",
@@ -56,12 +59,16 @@ def train(config):
     )
 
     logger = TensorBoardLogger(save_dir=config["logger_dir"], log_graph=True, name=config['name'])
-    model = EfficientAD_lightning(config)
+    if "ckpt" in config:
+        model = EfficientAD_lightning.load_from_checkpoint(config["ckpt"], config=config)
+    else:
+        model = EfficientAD_lightning(config)
     trainer = L.Trainer(logger=logger, max_steps=config["max_steps"], benchmark=True, precision='16-mixed', gradient_clip_val=0.5, callbacks=[checkpoint_callback])
 
     trainer.fit(model, train_loader, test_loader)
-    
+
     # TODO: find a way to cleanly exit cuvis
+
 
 if __name__ == "__main__":
     args = get_arguments()
