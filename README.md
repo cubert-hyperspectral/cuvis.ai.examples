@@ -4,25 +4,25 @@
 
 In this example, an anomaly detection model is trained outside cuvis.ai and inference is done using cuvis.ai.
 Since cuvis.ai was not yet ready to train models with, it had to be done separately.
-We chose to go with the [EfficientAD](https://arxiv.org/pdf/2303.14535v3) model since it is an exiting state-of-the-art
+We chose to go with the [EfficientAD](https://arxiv.org/pdf/2303.14535v3) model since it is an exciting state-of-the-art
 model in anomaly detection.
 
-In order to make it work with more than three channels the input layers of the model, as well as the given teacher
+To make it work with more than three channels the input layers of the model, as well as the given teacher
 checkpoint, were adapted.
 
 An ImageNet subset which is used in training can be
 found [here](https://s3.amazonaws.com/fast-ai-imageclas/imagenette2.tgz).
 This dataset has to be adapted to six channels in order to be used in our training loop. We did this by duplicating the
-three RGB channels to get a six channel image.
+three RGB channels to get a six-channel image.
 
 ## The dataset
 
-In our example dataset we used a custom build camera assembly which creates six channels cubes. Three channels are from
+In our example dataset we used a custom-built camera assembly which creates six-channels cubes. Three channels are from
 a 24 megapixel RGB-camera and the other three are SWIR channels with 1050nm, 1200nm and 1450nm wavelength respectively.
 
 The dataset is precisely built for unsupervised multi spectral anomaly detection. It features 255 images
 which are divided into normal and anomalous images. We used sawdust in a wooden tray to create unique images on which
-the model could lean. As anomalies, we used PLA, alcohol, leafs, transparent plastic foil as well as water to showcase
+the model could learn. As anomalies, we used PLA, alcohol, leafs, transparent plastic foil as well as water to showcase
 the
 use of our SWIR setup.
 
@@ -33,7 +33,7 @@ Notes what the validation images show can be found in the ``dataset_notes.md``
 ## How to train
 
 After downloading the sample dataset and ImageNet dataset and extracting them into the data folder, the
-``ImageNet_6ch_generator.py`` must be run. This will automatically create a six channel version of ImageNet.
+``ImageNet_6ch_generator.py`` must be run. This will automatically create a six-channel version of ImageNet.
 
 Now the train.py script can be run.
 
@@ -52,7 +52,7 @@ the `inference.ipynb` notebook.
 
 ## How to create a report for the model and dataset
 
-You can use `the report.py` in order to create a report of the model performance and generate a visual representation of
+You can use `the report.py` to create a report of the model performance and generate a visual representation of
 the outcome.
 The script will create a folder at a specified location, infer the given datasets and create a visually pleasing output.
 
