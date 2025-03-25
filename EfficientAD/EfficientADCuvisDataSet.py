@@ -76,6 +76,7 @@ class EfficientADCuvisDataSet(Dataset):
         self.max_img_shape = max_img_shape
         self.normalize = normalize
         self.white_percentage = white_percentage
+        self.channels = channels
     def __len__(self):
         return len(self.images)
 
@@ -97,6 +98,7 @@ class EfficientADCuvisDataSet(Dataset):
 
             mesu = self.proc.apply(mesu)
         cube = mesu.data["cube"].array
+
         cube = cube[300:-300, 300:-300,:] # cut the border of the image to exclude the tray borders
         cube = np.transpose(cube, (2, 0, 1))  # transpose from H x W x C to C x H x W for torch
         cube = torch.from_numpy(cube)
@@ -107,7 +109,10 @@ class EfficientADCuvisDataSet(Dataset):
             cube = torchvision.transforms.Normalize(mean=self.mean, std=self.std)(cube)
         if cube.shape[1] > self.max_img_shape or cube.shape[2] > self.max_img_shape:
             cube = torchvision.transforms.Resize(size=self.max_img_shape - 1, max_size=self.max_img_shape)(cube)
-
+        if self.channels == "RGB":
+            cube = cube[:3,:,:]
+        elif self.channels == "SWIR":
+            cube = cube[3:,:,:]
         if self.mode == "train":
 
             if self.imageNet_file_ending == ".npy":

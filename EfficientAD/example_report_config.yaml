@@ -1,4 +1,4 @@
-name: test_92 # name of the report
+name: test # name of the report
 
 ### DATASET ###
 datasets: [ D:/bedding_dataset/exported/val ]
@@ -17,7 +17,7 @@ Model:
   in_channels: 6 # number of input channels to the model
   use_imgNet_penalty: True # weather to use the imageNet loss penalty in training, this is set for compatibility reasons
 seed: 42
-checkpoint_to_load: ./EAD_model_0.92.ckpt # path to the model checkpoint which should be used for interference
+checkpoint_to_load: ./EAD_model_0.93_new.ckpt # path to the model checkpoint which should be used for interference
 
 ### REPORT ###
 create_images: true # weather to create inference and overlay images
