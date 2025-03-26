@@ -46,7 +46,7 @@ class EfficientAD_lightning(L.LightningModule):
         self.model_size = config['Model']['model_size']
         self.channel_size = config['Model']['channel_size']
         self.learning_rate = config['learning_rate'] if 'learning_rate' in config else 1e-4
-        self.weight_decay = config['weight_decay'] if 'weight_decay' in config else 1e-5
+        self.weight_decay = config.get('weight_decay',1e-5)
         self.in_channels = config['Model']['in_channels']
         self.model = EfficientAdModel(384, in_channels=self.in_channels, model_size=config["Model"]["model_size"], use_imgNet_penalty=config["Model"]["use_imgNet_penalty"])
         self.student = self.model.student
