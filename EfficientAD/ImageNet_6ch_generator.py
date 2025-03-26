@@ -11,7 +11,7 @@ for dataset in datasets:
     files = [file for file in path.rglob(f"*{ext}")]
 
     print("found", len(files), "files in", dataset, "ext:", ext, "path:", path, "exists", path.exists())
-
+output_dir = path.parent / (path.name + "_6_channel")
     for file in tqdm(files):
 
         img = cv.imread(str(file))
@@ -19,7 +19,8 @@ for dataset in datasets:
         extended_img[:, :, :3] = img
         extended_img[:, :, 3:] = img
 
-        new_path = Path(str(file).replace(dataset[0], f"{dataset[0]}_6_channel").replace(ext, ".npy"))
+        relative = file.relative_to(path)
+        new_path = output_dir / relative.with_suffix('.npy')
         new_path.parent.mkdir(parents=True, exist_ok=True)
 
         np.save(new_path, extended_img)
