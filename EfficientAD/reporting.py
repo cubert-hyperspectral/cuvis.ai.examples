@@ -7,7 +7,7 @@ from EfficientADCuvisDataSet import EfficientADCuvisDataSet
 import yaml
 import torch
 import lightning as L
-from EfficientAD.EfficientAD_lightning import EfficientAD_lightning
+from EfficientAD_lightning import EfficientAD_lightning
 from sklearn.metrics import roc_auc_score, roc_curve
 from matplotlib import pyplot as plt
 import argparse
@@ -15,9 +15,11 @@ import os
 import tqdm
 from torch.utils.data.dataloader import DataLoader
 from pathlib import Path
+import json
 import cv2 as cv
 import glob
-
+from sklearn.metrics import roc_curve, auc
+from collections import defaultdict
 
 def get_arguments():
     parser = argparse.ArgumentParser()
@@ -54,6 +56,113 @@ class Report:
         self.name = config["name"]
         self.reporting_run_folder = reporting_root_folder / self.name
         self.create_images = config['create_images'] if 'create_images' in config else True
+        self.create_roc = config['create_roc']
+        self.annotations = json.load(open(config["annotations"])) if config["annotations"] != "" else None
+
+
+    def plot_pixel_level_roc(self, anomaly_score_maps, groundtruth_masks, normalize=True):
+        assert len(anomaly_score_maps) == len(groundtruth_masks), "Mismatch in number of images"
+        # In this scenario, convert pixels to binary values
+        groundtruth_masks = groundtruth_masks > 0
+        y_scores = []
+        y_true = []
+
+        for score_map, gt_mask in zip(anomaly_score_maps, groundtruth_masks):
+            assert score_map.shape == gt_mask.shape, "Shape mismatch between score and groundtruth"
+
+            if normalize:
+                score_min, score_max = score_map.min(), score_map.max()
+                score_map = (score_map - score_min) / (score_max - score_min + 1e-8)
+
+            y_scores.append(score_map.flatten())
+            y_true.append(gt_mask.flatten())
+
+        y_scores = np.concatenate(y_scores)
+        y_true = np.concatenate(y_true)
+
+        if len(np.unique(y_true)) < 2:
+            raise ValueError("ROC is undefined. Ground truth must have both 0 and 1 values.")
+
+        fpr, tpr, _ = roc_curve(y_true, y_scores)
+        roc_auc = auc(fpr, tpr)
+
+        # Plotting
+        plt.figure(figsize=(6, 6))
+        plt.plot(fpr, tpr, label=f"AUC = {roc_auc:.3f}", color="blue")
+        plt.plot([0, 1], [0, 1], "--", color="gray")
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.title("Pixel-Level ROC Curve")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(f'{self.reporting_run_folder}/AUROC.png', dpi=300, bbox_inches="tight")
+        plt.close()
+        return fpr, tpr, roc_auc
+    
+    def plot_per_class_pixel_roc(self, anomaly_score_maps, groundtruth_masks, normalize=True, class_map=None):
+        assert len(anomaly_score_maps) == len(groundtruth_masks), "Mismatch in number of images"
+
+        # Invert class_map: pixel_value → class_name
+        inverted_class_map = {v: k for k, v in class_map.items()} if class_map else {}
+
+        class_scores = defaultdict(list)
+        class_truths = defaultdict(list)
+        present_classes = set()
+
+        for score_map, gt_mask in zip(anomaly_score_maps, groundtruth_masks):
+            assert score_map.shape == gt_mask.shape, "Score and mask shape mismatch"
+
+            if normalize:
+                score_min, score_max = score_map.min(), score_map.max()
+                score_map = (score_map - score_min) / (score_max - score_min + 1e-8)
+
+            unique_classes = np.unique(gt_mask)
+            present_classes.update(unique_classes)
+            for cls in unique_classes:
+                if cls == 0:
+                    continue  # skip background
+
+                binary_mask = (gt_mask == cls).astype(np.uint8)
+                class_scores[cls].append(score_map.flatten())
+                class_truths[cls].append(binary_mask.flatten())
+
+        # Plot ROC per class
+        plt.figure(figsize=(7, 7))
+        aucs = {}
+
+        for cls in sorted(present_classes):
+            if cls == 0:
+                continue  # skip background
+
+            if cls not in class_scores:
+                continue  # no pixels found for this class in scores
+
+            y_scores = np.concatenate(class_scores[cls])
+            y_true = np.concatenate(class_truths[cls])
+
+            if len(np.unique(y_true)) < 2:
+                print(f"Skipping class {cls}: insufficient positive/negative pixels")
+                continue
+
+            fpr, tpr, _ = roc_curve(y_true, y_scores)
+            roc_auc = auc(fpr, tpr)
+            aucs[cls] = roc_auc
+
+            cls_label = inverted_class_map.get(cls, f"Class {cls}")
+            plt.plot(fpr, tpr, label=f"{cls_label} (AUC = {roc_auc:.3f})")
+
+        plt.plot([0, 1], [0, 1], "k--", label="Random")
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.title("Per-Class Pixel-Level ROC Curve")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(f'{self.reporting_run_folder}/AUROC_Class.png', dpi=300, bbox_inches="tight")
+        aucs = {inverted_class_map[k]: float(v) for k, v in aucs.items()} # Reverse back to original ordering
+        print(aucs)
+        return aucs
 
     def generate_report(self):
         """
@@ -68,11 +177,16 @@ class Report:
             yaml.dump(self.config, f)
         metrics = {}
         all_labels = []
+        all_truths = []
         all_scores = []
-        for dataset_path in config['datasets']:
+        for dataset_path, labels_path in zip(config['datasets'], config['labels']):
             data_path = Path(dataset_path)
             cubes = glob.glob(str(data_path/ "*" / "*.cu3s"))
             cube_names = [Path(image).name for image in cubes]
+            # Load only the PNG masks associated with the labels
+            truth_labels = glob.glob(f'{labels_path}/*.png')
+            truth_labels_names = [Path(image).name for image in truth_labels]
+            print(truth_labels_names[0])
             dataset_name = data_path.name
 
             # create dataset and infer the cubes
@@ -89,12 +203,15 @@ class Report:
             labels = []
             scores = []
             for p in pred:
+                # Labels are the binary anomalous or not
                 labels.extend(p["label"])
                 if p["label"] is not np.nan: all_labels.extend(p["label"])
+                # anomally map is where the anomalies are
                 score = torch.max(p["anomaly_map"])
-                # score = torch.topk(p["anomaly_map"].flatten(), k=500)[0].sum()
                 scores.append(score)
-                all_scores.append(score)
+                all_scores.append(p["anomaly_map"].squeeze(0).squeeze(0).detach().cpu().numpy())
+                # Append the corresponding image label
+                all_truths.append(p["mask"].squeeze(0).numpy())
                 if p["anomaly_map"].max().item() > max_pred:
                     max_pred = p["anomaly_map"].max().item()
             if self.create_images:
@@ -106,27 +223,14 @@ class Report:
                     inference_image, _ = self.create_inference_png(batch, pred[j]['anomaly_map'].squeeze().detach().cpu().numpy(), labels[j], scores[j], cube_names[j])
                     inference_image.savefig(target_folder / (cube_names[j] + ".png"))
                     plt.close(inference_image)
-            if 0 in labels and 1 in labels:
-                auroc = roc_auc_score(labels, scores)
-                fpr, tpr, roc_thresholds = roc_curve(labels, scores)
-            else:
-                auroc = torch.tensor(0)
-                fpr = tpr = roc_thresholds = np.array(0)
-
-            auroc_plot = self.plot_curve(fpr, tpr, f"ROC curve (AUC = {auroc:.2f})", "ROC-curve", "False Positive Rate", "True Positive Rate")
-            auroc_plot.savefig(self.reporting_run_folder / (dataset_name + "_AUROC.png"), dpi=300, bbox_inches="tight")
-            auroc_plot.close()
-            metrics[dataset_name] = {"AU-ROC": auroc.item(), "FPR": fpr.tolist(), "TPR": tpr.tolist(), "ROC-thresholds": roc_thresholds.tolist()}
-        if 0 in all_labels and 1 in all_labels:
-            auroc = roc_auc_score(all_labels, all_scores)
-            fpr, tpr, roc_thresholds = roc_curve(all_labels, all_scores)
-        else:
-            auroc = torch.tensor(0)
-            fpr = tpr = roc_thresholds = np.array(0)
-        auroc_plot = self.plot_curve(fpr, tpr, f"ROC curve (AUC = {auroc:.2f})", "ROC-curve", "False Positive Rate", "True Positive Rate")
-        auroc_plot.savefig(self.reporting_run_folder / "overall_AUROC.png", dpi=300, bbox_inches="tight")
-        auroc_plot.close()
-        metrics["overall"] = {"AU-ROC": auroc.item(), "FPR": fpr.tolist(), "TPR": tpr.tolist(), "ROC-thresholds": roc_thresholds.tolist()}
+        if self.create_roc:
+            fpr, tpr, roc_auc = self.plot_pixel_level_roc(np.array(all_scores), np.array(all_truths))
+            class_aucs = self.plot_per_class_pixel_roc(np.array(all_scores), np.array(all_truths), class_map=self.annotations)
+            metrics[dataset_name] = {
+                'overall_auc': float(roc_auc),
+                'per_class_auc': class_aucs
+            }
+        
         with open(self.reporting_run_folder / "metrics.yaml", "w") as f:
             yaml.dump(metrics, f)
 
