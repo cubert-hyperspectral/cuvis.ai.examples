@@ -8,7 +8,7 @@ import yaml
 import torch
 import lightning as L
 from EfficientAD_lightning import EfficientAD_lightning
-from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.metrics import roc_curve
 from matplotlib import pyplot as plt
 import argparse
 import os
@@ -61,6 +61,42 @@ class Report:
 
 
     def plot_pixel_level_roc(self, anomaly_score_maps, groundtruth_masks, normalize=True):
+        """
+        Plot a pixel-level ROC curve and compute the overall AUC.
+
+        This method computes a Receiver Operating Characteristic (ROC) curve by evaluating
+        the anomaly score maps against binary ground truth masks. All non-zero pixel labels
+        in the ground truth masks are treated as positives (foreground), and zeros as negatives (background).
+
+        Parameters
+        ----------
+        anomaly_score_maps : List[np.ndarray]
+            A list of 2D arrays containing pixel-wise anomaly scores for each image.
+
+        groundtruth_masks : List[np.ndarray]
+            A list of 2D arrays with ground truth segmentation masks. All non-zero pixels
+            are considered foreground (label = 1), and zero pixels are considered background (label = 0).
+
+        normalize : bool, optional (default=True)
+            Whether to normalize each anomaly score map to the [0, 1] range before computing the ROC.
+
+        Returns
+        -------
+        tuple
+            A tuple containing:
+            - fpr (np.ndarray): False Positive Rates.
+            - tpr (np.ndarray): True Positive Rates.
+            - roc_auc (float): Area Under the ROC Curve (AUC).
+
+        Raises
+        ------
+        AssertionError
+            If the number of anomaly score maps and ground truth masks differ,
+            or if any score map and corresponding ground truth mask have different shapes.
+
+        ValueError
+            If the binary ground truth contains only one class (all 0s or all 1s), making ROC computation invalid.
+        """        
         assert len(anomaly_score_maps) == len(groundtruth_masks), "Mismatch in number of images"
         # In this scenario, convert pixels to binary values
         groundtruth_masks = groundtruth_masks > 0
@@ -101,6 +137,42 @@ class Report:
         return fpr, tpr, roc_auc
     
     def plot_per_class_pixel_roc(self, anomaly_score_maps, groundtruth_masks, normalize=True, class_map=None):
+        """
+        Plot per-class pixel-level ROC curves and compute AUCs for each class.
+
+        This method evaluates the anomaly score maps against ground truth segmentation masks
+        by computing Receiver Operating Characteristic (ROC) curves for each class (excluding background)
+        and plots them. AUC (Area Under Curve) values are returned for each present class.
+
+        Parameters
+        ----------
+        anomaly_score_maps : List[np.ndarray]
+            A list of 2D arrays representing pixel-wise anomaly scores for each image.
+
+        groundtruth_masks : List[np.ndarray]
+            A list of 2D arrays representing ground truth segmentation masks. Each pixel should
+            have an integer label indicating its class. Background should be labeled as 0.
+
+        normalize : bool, optional (default=True)
+            If True, normalize each score map to the [0, 1] range before computing ROC.
+
+        class_map : dict, optional
+            A mapping from class names (str) to pixel values (int). Used to label ROC curves
+            and returned AUC dictionary. If None, default to using pixel values as class labels.
+
+        Returns
+        -------
+        dict
+            A dictionary mapping class names (from `class_map` if provided, else "Class {id}") 
+            to AUC values (float) for the corresponding ROC curves.
+
+        Raises
+        ------
+        AssertionError
+            If the number of anomaly score maps and ground truth masks do not match,
+            or if any score map and mask pair have mismatched shapes.
+        """
+
         assert len(anomaly_score_maps) == len(groundtruth_masks), "Mismatch in number of images"
 
         # Invert class_map: pixel_value → class_name
@@ -161,7 +233,6 @@ class Report:
         plt.tight_layout()
         plt.savefig(f'{self.reporting_run_folder}/AUROC_Class.png', dpi=300, bbox_inches="tight")
         aucs = {inverted_class_map[k]: float(v) for k, v in aucs.items()} # Reverse back to original ordering
-        print(aucs)
         return aucs
 
     def generate_report(self):
@@ -186,7 +257,6 @@ class Report:
             # Load only the PNG masks associated with the labels
             truth_labels = glob.glob(f'{labels_path}/*.png')
             truth_labels_names = [Path(image).name for image in truth_labels]
-            print(truth_labels_names[0])
             dataset_name = data_path.name
 
             # create dataset and infer the cubes
@@ -206,7 +276,7 @@ class Report:
                 # Labels are the binary anomalous or not
                 labels.extend(p["label"])
                 if p["label"] is not np.nan: all_labels.extend(p["label"])
-                # anomally map is where the anomalies are
+                # anomaly map is the numerical value of reconstruction errors generated by the network
                 score = torch.max(p["anomaly_map"])
                 scores.append(score)
                 all_scores.append(p["anomaly_map"].squeeze(0).squeeze(0).detach().cpu().numpy())

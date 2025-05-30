@@ -136,6 +136,6 @@ class EfficientADCuvisDataSet(Dataset):
                     mask = mask.unsqueeze(0)
                     mask_out = torchvision.transforms.Resize(size=cube.shape[1:], interpolation=torchvision.transforms.InterpolationMode.NEAREST)(mask).squeeze(0) # Resize it in the same way
                 else:
-                    print('NO GT DATA AVAILABLE')
+                    print('NO GT DATA AVAILABLE for cube: {file_path}')
                     mask_out = torch.zeros(cube.shape[-2:], dtype=torch.bool)
                 return {"image": cube, "label": 1, "mask": mask_out, "defect": defect}
