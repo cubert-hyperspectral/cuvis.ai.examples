@@ -129,53 +129,19 @@ class Report:
         plt.xlabel("False Positive Rate")
         plt.ylabel("True Positive Rate")
         plt.title("Pixel-Level ROC Curve")
-        plt.legend()
+        plt.legend(loc='lower right')
         plt.grid(True)
         plt.tight_layout()
         plt.savefig(f'{self.reporting_run_folder}/AUROC.png', dpi=300, bbox_inches="tight")
         plt.close()
         return fpr, tpr, roc_auc
-    
+
     def plot_per_class_pixel_roc(self, anomaly_score_maps, groundtruth_masks, normalize=True, class_map=None):
         """
-        Plot per-class pixel-level ROC curves and compute AUCs for each class.
-
-        This method evaluates the anomaly score maps against ground truth segmentation masks
-        by computing Receiver Operating Characteristic (ROC) curves for each class (excluding background)
-        and plots them. AUC (Area Under Curve) values are returned for each present class.
-
-        Parameters
-        ----------
-        anomaly_score_maps : List[np.ndarray]
-            A list of 2D arrays representing pixel-wise anomaly scores for each image.
-
-        groundtruth_masks : List[np.ndarray]
-            A list of 2D arrays representing ground truth segmentation masks. Each pixel should
-            have an integer label indicating its class. Background should be labeled as 0.
-
-        normalize : bool, optional (default=True)
-            If True, normalize each score map to the [0, 1] range before computing ROC.
-
-        class_map : dict, optional
-            A mapping from class names (str) to pixel values (int). Used to label ROC curves
-            and returned AUC dictionary. If None, default to using pixel values as class labels.
-
-        Returns
-        -------
-        dict
-            A dictionary mapping class names (from `class_map` if provided, else "Class {id}") 
-            to AUC values (float) for the corresponding ROC curves.
-
-        Raises
-        ------
-        AssertionError
-            If the number of anomaly score maps and ground truth masks do not match,
-            or if any score map and mask pair have mismatched shapes.
+        Optimized memory-efficient version of per-class pixel-level ROC and AUC computation.
         """
-
         assert len(anomaly_score_maps) == len(groundtruth_masks), "Mismatch in number of images"
 
-        # Invert class_map: pixel_value → class_name
         inverted_class_map = {v: k for k, v in class_map.items()} if class_map else {}
 
         class_scores = defaultdict(list)
@@ -186,29 +152,31 @@ class Report:
             assert score_map.shape == gt_mask.shape, "Score and mask shape mismatch"
 
             if normalize:
-                score_min, score_max = score_map.min(), score_map.max()
-                score_map = (score_map - score_min) / (score_max - score_min + 1e-8)
+                score_min, score_max = np.min(score_map), np.max(score_map)
+                denom = score_max - score_min
+                if denom > 1e-8:
+                    score_map = (score_map - score_min) / denom
+                else:
+                    score_map = np.zeros_like(score_map)  # handle constant maps
 
-            unique_classes = np.unique(gt_mask)
-            present_classes.update(unique_classes)
-            for cls in unique_classes:
+            for cls in np.unique(gt_mask):
                 if cls == 0:
                     continue  # skip background
+                present_classes.add(cls)
+                mask = (gt_mask == cls)
+                class_scores[cls].append(score_map[mask])
+                class_truths[cls].append(np.ones(np.count_nonzero(mask)))
+                # Add negative samples from other classes
+                neg_mask = (gt_mask != cls) & (gt_mask != 0)
+                class_scores[cls].append(score_map[neg_mask])
+                class_truths[cls].append(np.zeros(np.count_nonzero(neg_mask)))
 
-                binary_mask = (gt_mask == cls).astype(np.uint8)
-                class_scores[cls].append(score_map.flatten())
-                class_truths[cls].append(binary_mask.flatten())
-
-        # Plot ROC per class
         plt.figure(figsize=(7, 7))
         aucs = {}
 
         for cls in sorted(present_classes):
-            if cls == 0:
-                continue  # skip background
-
             if cls not in class_scores:
-                continue  # no pixels found for this class in scores
+                continue
 
             y_scores = np.concatenate(class_scores[cls])
             y_true = np.concatenate(class_truths[cls])
@@ -228,12 +196,16 @@ class Report:
         plt.xlabel("False Positive Rate")
         plt.ylabel("True Positive Rate")
         plt.title("Per-Class Pixel-Level ROC Curve")
-        plt.legend()
+        plt.legend(loc='lower right')
         plt.grid(True)
         plt.tight_layout()
+
+        os.makedirs(self.reporting_run_folder, exist_ok=True)
         plt.savefig(f'{self.reporting_run_folder}/AUROC_Class.png', dpi=300, bbox_inches="tight")
-        aucs = {inverted_class_map[k]: float(v) for k, v in aucs.items()} # Reverse back to original ordering
-        return aucs
+        plt.close()
+
+        return {inverted_class_map.get(k, f"Class {k}"): float(v) for k, v in aucs.items()}
+
 
     def generate_report(self):
         """
@@ -295,7 +267,7 @@ class Report:
                     plt.close(inference_image)
         if self.create_roc:
             fpr, tpr, roc_auc = self.plot_pixel_level_roc(np.array(all_scores), np.array(all_truths))
-            class_aucs = self.plot_per_class_pixel_roc(np.array(all_scores), np.array(all_truths), class_map=self.annotations)
+            class_aucs = self.plot_per_class_pixel_roc(np.array(all_scores).astype(np.float32), np.array(all_truths).astype(np.float32), class_map=self.annotations)
             metrics[dataset_name] = {
                 'overall_auc': float(roc_auc),
                 'per_class_auc': class_aucs
@@ -310,7 +282,7 @@ class Report:
         :param batch: input batch of the dataset class
         :param pred: prediction outcome of the model
         :param label: label of the image
-        :param score: calculated anomalie score
+        :param score: calculated anomaly score
         :param image_name: name of the image
         :return: pyplot figure and axis
         """
