@@ -222,13 +222,11 @@ class Report:
         all_labels = []
         all_truths = []
         all_scores = []
-        for dataset_path, labels_path in zip(config['datasets'], config['labels']):
+        for dataset_path in config['datasets']:
             data_path = Path(dataset_path)
             cubes = glob.glob(str(data_path/ "*" / "*.cu3s"))
             cube_names = [Path(image).name for image in cubes]
             # Load only the PNG masks associated with the labels
-            truth_labels = glob.glob(f'{labels_path}/*.png')
-            truth_labels_names = [Path(image).name for image in truth_labels]
             dataset_name = data_path.name
 
             # create dataset and infer the cubes
