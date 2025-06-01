@@ -19,7 +19,6 @@ from torch import nn
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from skorch.callbacks import TensorBoard
-import dill as pickle
 
 # Define the PyTorch model
 class Autoencoder(nn.Module):
@@ -176,7 +175,7 @@ def create_skorch_model(
     print(f'Using {loss} as loss!')
     # Add a monitor to save the best performance
     monitor = lambda net: all(net.history[-1, ('train_loss_best', 'valid_loss_best')])
-    checkpoint = Checkpoint(monitor=monitor, f_params="params_{last_epoch[epoch]}.pt")
+    checkpoint = Checkpoint(monitor=monitor, f_params="./runs/params_{last_epoch[epoch]}.pt")
     # Create initial callbacks
     callbacks = [ProgressBar(),early_stopping, checkpoint]
     # Enable us to view model performance through the TensorBoard GUI
