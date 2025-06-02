@@ -33,7 +33,7 @@ class PerPixelAECuvisDataSet(Dataset):
         """
         self.path = path
         self.mode = mode
-        self.file_paths = glob.glob(os.path.join(self.path, '*.cu3s'))
+        self.file_paths = glob.glob(os.path.join(self.path, '*.cu3s'))[:10]
         print(f'Found: {len(self.file_paths)} filepaths')
         self.in_channels = in_channels
         self.images = [[file_path, index]

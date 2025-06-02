@@ -1,13 +1,8 @@
 import pathlib
-
-import lightning
 import numpy as np
-
-from EfficientADCuvisDataSet import EfficientADCuvisDataSet
+from PerPixelAECuvisDataSet import PerPixelAECuvisDataSet
 import yaml
 import torch
-import lightning as L
-from EfficientAD_lightning import EfficientAD_lightning
 from sklearn.metrics import roc_curve
 from matplotlib import pyplot as plt
 import argparse
@@ -381,6 +376,5 @@ if __name__ == "__main__":
     args = get_arguments()
     config = parse_args(args)
     model = EfficientAD_lightning.load_from_checkpoint(config["checkpoint_to_load"], config=config)
-    trainer = L.Trainer(inference_mode=True, precision='16-mixed')
-    rep = Report(config, model, trainer, Path("../data/EAD_reporting/"))
+    rep = Report(config, model, trainer, Path("../data/PerPixelAE_reporting/"))
     rep.generate_report()
