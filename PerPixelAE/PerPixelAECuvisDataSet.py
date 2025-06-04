@@ -114,4 +114,7 @@ class PerPixelAECuvisDataSet(Dataset):
             else:
                 print(f'NO GT DATA AVAILABLE for cube: {file_path}')
                 mask_out = torch.zeros(cube.shape[-2:], dtype=torch.bool)
-            return {"image": cube, "label": 1, "mask": mask_out, "defect": defect}
+            channels, width, height = cube.shape
+            datacube_flat = cube.view(channels, -1)
+            datacube_2d = datacube_flat.permute(1, 0) # This flattens the datacube into a long list of pixels
+            return {"image": datacube_2d, "dims": cube.shape, "label": 1, "mask": mask_out, "defect": defect}
