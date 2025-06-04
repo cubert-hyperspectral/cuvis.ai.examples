@@ -22,7 +22,7 @@ Model:
   in_channels: 6 # number of input channels to the model
   loss: "Hybrid" # Loss function to use, either "MSE", "SAM", or "Hybrid"
 learning_rate: 0.001
-max_epochs: 10 # number of epochs to train the model for
+max_epochs: 40 # number of epochs to train the model for
 batch_size: 4 # maximum number of datacubes to load in each batch
 seed: 42
 use_tensorboard: true # whether to use the Tensorboard GUI
