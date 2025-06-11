@@ -2,6 +2,7 @@ import torchvision
 from torch.utils.data import Dataset
 import cuvis
 import os
+import glob
 from cuvis.cuvis_types import ProcessingMode
 import numpy as np
 import cv2 as cv
@@ -12,19 +13,16 @@ from functools import partial
 from pathlib import Path
 
 
-class EfficientADCuvisDataSet(Dataset):
+class PerPixelAECuvisDataSet(Dataset):
     """
-    Dataset class to use the cuvis dataset with the EfficientAD model.
+    Dataset class to use the cuvis dataset with the PerPixelAE model.
     """
 
-    def __init__(self, path: str = "data/cubes", mode: str = "train", imageNet_path: str = "../data/ImageNet_6_channel",
-                 imageNet_file_ending: str = '.npy', in_channels: int = 6, mean: list = None, std: list = None, normalize: bool = True, max_img_shape: int = 1500, white_percentage: float = 0.55,
+    def __init__(self, path: str = "data/cubes", mode: str = "train", in_channels: int = 6, mean: list = None, std: list = None, normalize: bool = True, max_img_shape: int = 1500, white_percentage: float = 0.55,
                  channels: str = "ALL"):
         """
         :param path: Path to the session files. These must contain data cubes which are expected to be in reflectance mode. default: 'data/cubes'
         :param mode: Mode for which this dataset will be used. If this is 'train' the data will be prepared for training, otherwise it will fit the validation / inference process. default: 'train'
-        :param imageNet_path: Path to the imageNet files needed for training. default: '../data/ImageNet_6_channel'
-        :param imageNet_file_ending: File extension of the specified ImageNet dataset, either '.npy' or '.jpeg'. default: '.npy'
         :param in_channels: Number of input channels to the model. default: '6'
         :param mean: List of means for each channel of the input dataset. default: None
         :param std: List of standard deviations for each channel of the input dataset. default: None
@@ -35,24 +33,12 @@ class EfficientADCuvisDataSet(Dataset):
         """
         self.path = path
         self.mode = mode
-        self.imageNet_file_ending = imageNet_file_ending
-        self.imageNet_path = imageNet_path
-        self.file_paths = [
-            os.path.join(root, file)
-            for root, dirs, files in os.walk(self.path)
-            for file in files if file.lower().endswith(".cu3s")
-        ]
+        self.file_paths = glob.glob(os.path.join(self.path, '*.cu3s'))
+        print(f'Found: {len(self.file_paths)} filepaths')
         self.in_channels = in_channels
         self.images = [[file_path, index]
                        for file_path in self.file_paths
                        for index in range(len(cuvis.SessionFile(file_path)))]
-
-        if imageNet_path is not None:
-            self.imgNet_files = [
-                os.path.join(root, file)
-                for root, dirs, files in os.walk(imageNet_path)
-                for file in files if file.lower().endswith(self.imageNet_file_ending) and mode in os.path.join(root, file)
-            ]
         if mode == 'test':
             self.gt = {}
             for file_path in self.file_paths:
@@ -77,8 +63,9 @@ class EfficientADCuvisDataSet(Dataset):
         self.normalize = normalize
         self.white_percentage = white_percentage
         self.channels = channels
+
     def __len__(self):
-        return len(self.images)
+        return len(self.file_paths)
 
     def __getitem__(self, idx):
         """
@@ -86,9 +73,9 @@ class EfficientADCuvisDataSet(Dataset):
         :param idx: index of the item to get
         :return: dict either containing the cube and an imageNet image for training or cube, label, mask and which defect is shown for validation / inference
         """
-        file_path = self.images[idx][0]
+        file_path = self.file_paths[idx]
         sess = cuvis.SessionFile(file_path)
-        mesu = sess.get_measurement(self.images[idx][1])
+        mesu = sess.get_measurement(0)
 
         if "cube" not in mesu.data:
             if self.proc is None:
@@ -112,30 +99,22 @@ class EfficientADCuvisDataSet(Dataset):
             cube = cube[:3,:,:]
         elif self.channels == "SWIR":
             cube = cube[3:,:,:]
-        if self.mode == "train":
-
-            if self.imageNet_file_ending == ".npy":
-                imgNet_img = np.load(random.choice(self.imgNet_files))
-            else:
-                imgNet_img = np.array(cv.imread(random.choice(self.imgNet_files)))
-            imgNet_img = np.transpose(imgNet_img, (2, 0, 1))  # transpose from H x W x C to C x H x W for torch
-            imgNet_img = (imgNet_img / 255).astype(np.float32)
-            imgNet_img = torch.from_numpy(imgNet_img)
-            if imgNet_img.shape[1] > 1000 or imgNet_img.shape[2] > 1000 or imgNet_img.shape[1] < 256 or imgNet_img.shape[2] < 256:
-                imgNet_img = torchvision.transforms.Resize(size=500, max_size=1000)(imgNet_img)
-
-            return self.transform({"image": cube, "imgNet_img": imgNet_img})
+        if "_ok_ok_" in file_path and self.mode == "train":
+            channels, width, height = cube.shape
+            datacube_flat = cube.view(channels, -1)
+            datacube_2d = datacube_flat.permute(1, 0) # This flattens the datacube into a long list of pixels
+            return datacube_2d, datacube_2d
         else:
-            if "_ok_ok_" in file_path:
-                return {"image": cube, "label": 0, "mask": torch.zeros(cube.shape[-2:], dtype=torch.bool), "defect": "good"}
+            defect = Path(file_path).parent.name
+            if os.path.exists(self.gt[file_path]):
+                mask = cv.imread(self.gt[file_path], cv.IMREAD_GRAYSCALE)[300:-300, 300:-300] # Crop the mask
+                mask = torch.from_numpy(mask)
+                mask = mask.unsqueeze(0)
+                mask_out = torchvision.transforms.Resize(size=cube.shape[1:], interpolation=torchvision.transforms.InterpolationMode.NEAREST)(mask).squeeze(0) # Resize it in the same way
             else:
-                defect = Path(file_path).parent.name
-                if os.path.exists(self.gt[file_path]):
-                    mask = cv.imread(self.gt[file_path], cv.IMREAD_GRAYSCALE)[300:-300, 300:-300] # Crop the mask
-                    mask = torch.from_numpy(mask)
-                    mask = mask.unsqueeze(0)
-                    mask_out = torchvision.transforms.Resize(size=cube.shape[1:], interpolation=torchvision.transforms.InterpolationMode.NEAREST)(mask).squeeze(0) # Resize it in the same way
-                else:
-                    print(f'NO GT DATA AVAILABLE for cube: {file_path}')
-                    mask_out = torch.zeros(cube.shape[-2:], dtype=torch.bool)
-                return {"image": cube, "label": 1, "mask": mask_out, "defect": defect}
+                print(f'NO GT DATA AVAILABLE for cube: {file_path}')
+                mask_out = torch.zeros(cube.shape[-2:], dtype=torch.bool)
+            channels, width, height = cube.shape
+            datacube_flat = cube.view(channels, -1)
+            datacube_2d = datacube_flat.permute(1, 0) # This flattens the datacube into a long list of pixels
+            return {"image": datacube_2d, "dims": cube.shape, "label": 1, "mask": mask_out, "defect": defect}
