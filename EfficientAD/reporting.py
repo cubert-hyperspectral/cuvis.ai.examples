@@ -37,7 +37,7 @@ def parse_args(args):
 class Report:
     """
     Class to create a report for a given dataset folder
-    
+
     Args:
         config(dict): parsed yaml configuration.
         model(torch.model): model to use to infer the data.
@@ -96,7 +96,7 @@ class Report:
 
         ValueError
             If the binary ground truth contains only one class (all 0s or all 1s), making ROC computation invalid.
-        """        
+        """
         assert len(anomaly_score_maps) == len(groundtruth_masks), "Mismatch in number of images"
         # In this scenario, convert pixels to binary values
         groundtruth_masks = groundtruth_masks > 0
@@ -167,7 +167,7 @@ class Report:
                 class_scores[cls].append(score_map[mask])
                 class_truths[cls].append(np.ones(np.count_nonzero(mask)))
                 # Add negative samples from other classes
-                neg_mask = (gt_mask != cls) & (gt_mask != 0)
+                neg_mask = (gt_mask == 0)
                 class_scores[cls].append(score_map[neg_mask])
                 class_truths[cls].append(np.zeros(np.count_nonzero(neg_mask)))
 
@@ -270,7 +270,7 @@ class Report:
                 'overall_auc': float(roc_auc),
                 'per_class_auc': class_aucs
             }
-        
+
         with open(self.reporting_run_folder / "metrics.yaml", "w") as f:
             yaml.dump(metrics, f)
 

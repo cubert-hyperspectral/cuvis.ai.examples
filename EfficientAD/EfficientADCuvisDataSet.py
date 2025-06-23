@@ -57,7 +57,7 @@ class EfficientADCuvisDataSet(Dataset):
             self.gt = {}
             for file_path in self.file_paths:
                 if "_ok_ok_" not in file_path:
-                    self.gt[file_path] = file_path.replace(".cu3s", "_0_RGB_mask.png").replace("test", "ground_truth")
+                    self.gt[file_path] = file_path.replace(".cu3s", "_0_RGB_mask.png")
 
         self.transform = v2.Compose([
             v2.Lambda(torch.as_tensor),
