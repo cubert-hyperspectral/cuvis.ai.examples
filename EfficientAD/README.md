@@ -80,7 +80,7 @@ reporting.py -c example_report_config.yaml
 
 ## Results
 
-With the given model weights and dataset, we reached a 0.93 image-AUROC and a 0.91 pixel-Auroc. Most of the anomalies
+With the given model weights and dataset, we reached a 0.93 image-AUROC and a 0.91 pixel-AUROC. Most of the anomalies
 were detected correctly, only some were hardly detectable by the model.
 
 ![inference ROC](../pictures/AUROC_Class.jpg)
@@ -89,6 +89,6 @@ Inference ROC over all classes present in our validation dataset.
 ![inference result](../pictures/inference.jpg)
 Here we can see a detection result for an image with mixed PLA cubes ranging in size and color. We can see that the
 bigger cubes are easily detected, while the smallest cubes (2mm) are only detected with higher thresholds. Also for
-black PLA only the edges of the cube is detected as anomalous.
+black PLA only the edges of the cube are detected.
 
 Both images were created by the `report.py` script.
