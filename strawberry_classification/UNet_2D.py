@@ -77,7 +77,7 @@ class FreshTwin2DUNet(nn.Module):
         c4 = self.conv4(p3)
 
         # Classification output
-        flat = torch.flatten(c4, 1)
+        # flat = torch.flatten(c4, 1)
         # out1 = F.softmax(self.output_1(flat), dim=1)
 
         # Decoder

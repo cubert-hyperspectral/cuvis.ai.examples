@@ -7,8 +7,6 @@ from FreshTwinCuvisDataset import FreshTwinCuvisDataset
 from lightning.pytorch.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from pathlib import Path
-#from torch_pca import PCA
-from sklearn.decomposition import IncrementalPCA as PCA
 import torch
 
 
@@ -28,7 +26,7 @@ def main():
     args = get_arguments()
     config = parse_args(args)
 
-    full_dataset = FreshTwinCuvisDataset(Path(config["data_path"]), white_path=config["white_path"], dark_path=config["dark_path"], in_channels=config["in_channels"])
+    full_dataset = FreshTwinCuvisDataset(Path(config["data_path"]), white_path=config["white_path"], dark_path=config["dark_path"], cube_size=config["cube_size"])
 
     train_size = int(0.8 * len(full_dataset))
     test_size = len(full_dataset) - train_size
@@ -48,7 +46,7 @@ def main():
     )
     logger = TensorBoardLogger(save_dir=config["logger_dir"], log_graph=True, name=config['name'])
 
-    model = FreshTwin_lightning(config)
+    model = FreshTwin_lightning(config,  DataLoader(full_dataset, batch_size=config["batch_size"], shuffle=False, num_workers=0, persistent_workers=False))
 
     trainer = L.Trainer(logger=logger,
                         max_steps=config["max_steps"],

@@ -4,13 +4,14 @@ name: test_2D
 ckpt_dir: "../data/ckpts"
 logger_dir: "../data/logs"
 max_steps: 200000
-in_channels: 32
+pca_channels: 32
+cube_channels: 38
+cube_size: [200,200]
 num_classes: 4
 white_path: "D:/FreshTwin/22_04_25_cleaned/session_009/swir/white_001.cu3s"
 dark_path: "D:/FreshTwin/22_04_25_cleaned/session_009/swir/dark_002.cu3s"
-model: "2D"
-
 learning_rate: 0.0001
 weight_decay: 0.001
 
+cube_rgb_channels: [4,12,25] #which channels to use for the RGB representation
 checkpoint_to_load: "epoch_loss=0.01.ckpt"

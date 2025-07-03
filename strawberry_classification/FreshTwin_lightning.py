@@ -4,13 +4,14 @@ import lightning as L
 import torchvision.transforms
 
 from UNet_2D import FreshTwin2DUNet
-from UNet_3D import FreshTwin3DUNet
 import torch
 from torchmetrics.segmentation import DiceScore, MeanIoU
 from torchmetrics.classification import AveragePrecision, Accuracy
 from torchvision.transforms.functional import equalize
 import torch.nn.functional as F
 import cv2 as cv
+from gpu_pca import IncrementalPCAonGPU as IncPca
+from tqdm import tqdm
 
 
 class GeneralizedDiceLoss(torch.nn.Module):
@@ -67,43 +68,17 @@ class GeneralizedDiceLoss(torch.nn.Module):
 
         return loss.mean()
 
-
-def multiclass_dice_loss(pred, target, smooth=1):
-    """
-    Computes Dice Loss for multi-class segmentation.
-    Args:
-        pred: Tensor of predictions (batch_size, C, H, W).
-        target: One-hot encoded ground truth (batch_size, C, H, W).
-        smooth: Smoothing factor.
-    Returns:
-        Scalar Dice Loss.
-    """
-    pred = F.softmax(pred, dim=1)  # Convert logits to probabilities
-    num_classes = pred.shape[1]  # Number of classes (C)
-    dice = 0  # Initialize Dice loss accumulator
-
-    for c in range(num_classes):  # Loop through each class
-        pred_c = pred[:, c]  # Predictions for class c
-        target_c = target[:, c]  # Ground truth for class c
-
-        intersection = (pred_c * target_c).sum(dim=(1, 2))  # Element-wise multiplication
-        union = pred_c.sum(dim=(1, 2)) + target_c.sum(dim=(1, 2))  # Sum of all pixels
-
-        dice += (2. * intersection + smooth) / (union + smooth)  # Per-class Dice score
-
-    return 1 - dice.mean() / num_classes  # Average Dice Loss across classes
-
-
 class FreshTwin_lightning(L.LightningModule):
-    def __init__(self, config):
+    def __init__(self, config, data_loader):
         super().__init__()
-        self.model_type = config["model"]
-        if self.model_type == "3D":
-            self.model = FreshTwin3DUNet(in_channels=config["in_channels"], num_classes=config["num_classes"])
-        else:
-            self.model = FreshTwin2DUNet(in_channels=config["in_channels"], num_classes=config["num_classes"])
+        self.pca_channels = config["pca_channels"]
+        self.cube_channels = config["cube_channels"]
+        self.model = FreshTwin2DUNet(in_channels=config["pca_channels"], num_classes=config["num_classes"])
         self.learning_rate = config["learning_rate"]
         self.weight_decay = config["weight_decay"]
+
+        # TODO: decide wich metrics are relevant and remove some
+        # TODO: add ROC and AU-ROC
         self.ap = AveragePrecision(task='multiclass', num_classes=config["num_classes"])
         self.acc1 = Accuracy(task='multiclass', num_classes=config["num_classes"], threshold=0.1)
         self.acc2 = Accuracy(task='multiclass', num_classes=config["num_classes"], threshold=0.2)
@@ -125,35 +100,44 @@ class FreshTwin_lightning(L.LightningModule):
         self.iou4 = MeanIoU(num_classes=4, include_background=False)
         self.iou5 = MeanIoU(num_classes=4, include_background=False)
         self.to_PIL = torchvision.transforms.ToPILImage()
-        self.high_loss = {}
         self.val_loss = []
         self.train_loss = []
         self.save_imgs = False
+        self.data_loader = data_loader
+        self.pca = IncPca(n_components=self.pca_channels)
+        self.image_height, self.image_width = config["cube_size"]
+
+    def calc_pca(self, cube):
+
+        # TODO: stream line this
+        pca_image = cube.squeeze(0).permute(1, 2, 0).reshape(-1, self.cube_channels)
+        pca_image = self.pca.transform(pca_image)
+        pca_image = pca_image.reshape(1, self.image_height, self.image_width, self.pca_channels).permute(0, 3, 1, 2).type(torch.float16)
+        return pca_image
 
     def setup(self, stage):
-        pass  # TODO: move PCA here!
+        for batch in tqdm(self.data_loader, desc="PCA fit"):
+            pca_image = batch["image"].squeeze(0).permute(1, 2, 0).reshape(-1, self.cube_channels)
+            self.pca.partial_fit(pca_image)
+
     def training_step(self, batch, batch_idx):
-        res = self.model.forward(batch["image"])
+        input_image = self.calc_pca(batch["image"])
+        res = self.model.forward(input_image)
         pred = torch.softmax(res, dim=0)
-        # loss = torch.nn.CrossEntropyLoss()(res.unsqueeze(0), batch["mask"].type(torch.long))
-        # loss = torch.nn.functional.smooth_l1_loss(res.unsqueeze(0), batch["mask"].type(torch.long))
-        # if self.model_type == "3D":
-        #     one_hot_pred = torch.nn.functional.one_hot(pred.type(torch.long), num_classes=4).movedim(-1, 1)
-        # else:
-        #     one_hot_pred = torch.nn.functional.one_hot(pred.unsqueeze(0).type(torch.long), num_classes=4).movedim(-1, 1)
+
 
         one_hot_gt = torch.nn.functional.one_hot(batch["mask"].type(torch.long), num_classes=4).movedim(-1, 1)
 
         if batch["number"][0] + "_" + batch["side"][0] + "_" + batch["day"][0] == "008_3_22" and False or self.save_imgs:
 
             gt_mask = batch["mask"]
-            rgb_mask = torch.zeros((200, 200, 3))
+            rgb_mask = torch.zeros((self.image_height, self.image_width, 3))
             rgb_mask[:, :, 0] = (gt_mask == 1).float()  # Red channel
             rgb_mask[:, :, 2] = (gt_mask == 2).float()  # Blue channel
             rgb_mask = cv.cvtColor((rgb_mask * 255).type(torch.uint8).detach().cpu().numpy(), cv.COLOR_BGR2RGB)
 
             prediction = torch.argmax(res, dim=0, keepdim=True)
-            rgb_pred = torch.zeros((200, 200, 3)).type(torch.uint8)
+            rgb_pred = torch.zeros((self.image_height, self.image_width, 3)).type(torch.uint8)
             rgb_pred[:, :, 0] = (prediction == 1) * 255  # Red channel
             rgb_pred[:, :, 2] = (prediction == 2) * 255  # Blue channel
             rgb_pred = rgb_pred.detach().cpu().numpy()
@@ -175,39 +159,24 @@ class FreshTwin_lightning(L.LightningModule):
                                     4,
                                     4))
                 cv.waitKey()
-        # loss = GeneralizedDiceLoss(generalize=True)(pred, one_hot_gt)
 
         loss = GeneralizedDiceLoss(generalize=True)(pred.unsqueeze(0), one_hot_gt)
 
         self.train_loss.append(loss.item())
         self.log("train/loss", loss, prog_bar=True)
-        if loss < 0.01 and self.global_step > 500:
-            # print("high loss detected", batch["number"], batch["side"], batch["day"])
-            if batch["number"][0] + "_" + batch["side"][0] + "_" + batch["day"][0] not in self.high_loss:
-                self.high_loss[batch["number"][0] + "_" + batch["side"][0] + "_" + batch["day"][0]] = 1
-            else:
-                self.high_loss[batch["number"][0] + "_" + batch["side"][0] + "_" + batch["day"][0]] += 1
 
         return loss
 
     def validation_step(self, batch, batch_idx):
-
-        res = self.model.forward(batch["image"])
+        input_image = self.calc_pca(batch["image"])
+        res = self.model.forward(input_image)
         gt_mask = batch['mask']
         pred = torch.softmax(res, dim=0).unsqueeze(0)
         one_hot_gt = torch.nn.functional.one_hot(gt_mask.type(torch.long), num_classes=4).movedim(-1, 1)
         loss = GeneralizedDiceLoss(generalize=True)(pred, one_hot_gt).item()
         self.val_loss.append(loss)
-        if loss < 0.01 and self.global_step > 500:
-            # print("high loss detected", batch["number"], batch["side"], batch["day"])
-            if batch["number"][0] + "_" + batch["side"][0] + "_" + batch["day"][0] not in self.high_loss:
-                self.high_loss[batch["number"][0] + "_" + batch["side"][0] + "_" + batch["day"][0]] = 1
-            else:
-                self.high_loss[batch["number"][0] + "_" + batch["side"][0] + "_" + batch["day"][0]] += 1
-        if self.model_type == "3D":
-            prediction = torch.argmax(res, dim=1, keepdim=False)
-        else:
-            prediction = torch.argmax(res, dim=0, keepdim=True)
+
+        prediction = torch.argmax(res, dim=0, keepdim=True)
 
         one_hot_pred = torch.nn.functional.one_hot(prediction.type(torch.long), num_classes=4).movedim(-1, 1)
 
@@ -226,33 +195,24 @@ class FreshTwin_lightning(L.LightningModule):
         self.iou4.update(prediction > 0.4, gt_mask)
         self.iou5.update(prediction > 0.5, gt_mask)
 
-        if self.model_type == "3D":
-            self.ap.update(res, gt_mask)
 
-            self.acc1.update(res, gt_mask)
-            self.acc2.update(res, gt_mask)
-            self.acc3.update(res, gt_mask)
-            self.acc4.update(res, gt_mask)
-            self.acc5.update(res, gt_mask)
-        else:
-            self.ap.update(res.unsqueeze(0), gt_mask)
+        self.ap.update(res.unsqueeze(0), gt_mask)
 
-            self.acc1.update(res.unsqueeze(0), gt_mask)
-            self.acc2.update(res.unsqueeze(0), gt_mask)
-            self.acc3.update(res.unsqueeze(0), gt_mask)
-            self.acc4.update(res.unsqueeze(0), gt_mask)
-            self.acc5.update(res.unsqueeze(0), gt_mask)
+        self.acc1.update(res.unsqueeze(0), gt_mask)
+        self.acc2.update(res.unsqueeze(0), gt_mask)
+        self.acc3.update(res.unsqueeze(0), gt_mask)
+        self.acc4.update(res.unsqueeze(0), gt_mask)
+        self.acc5.update(res.unsqueeze(0), gt_mask)
 
-        # TODO: transform hyperspectral to RGB
+
         if batch_idx % 10 == 0:
             input_img = batch["image"][0, 0].unsqueeze(0)
             rgb_img = batch["rgb_image"].squeeze(0)
-            rgb_pred = torch.zeros(3, 200, 200)  # TODO: remove magic numbers
+            rgb_pred = torch.zeros(3, self.image_height, self.image_width)
             rgb_pred[0] = (prediction == 1).float()  # Red channel
             rgb_pred[2] = (prediction == 2).float()  # Blue channel
             eq_pred = equalize((255.0 * rgb_pred).to(torch.uint8))
-            # eq_mask = equalize((255.0 * (gt_mask - gt_mask.min()) / (gt_mask.max() - gt_mask.min())).to(torch.uint8))
-            rgb_mask = torch.zeros(3, 200, 200)  # TODO: remove magic numbers
+            rgb_mask = torch.zeros(3, self.image_height, self.image_width)
             rgb_mask[0] = (gt_mask == 1).float()  # Red channel
             rgb_mask[2] = (gt_mask == 2).float()  # Blue channel
             eq_pca = equalize((255.0 * (input_img - input_img.min()) / (input_img.max() - input_img.min())).to(torch.uint8))
@@ -264,14 +224,14 @@ class FreshTwin_lightning(L.LightningModule):
             self.logger.experiment.add_scalar(f'{name}/loss', loss, global_step=self.global_step)
 
         if self.save_imgs:
-            rgb_pred = torch.zeros((200, 200, 3)).type(torch.uint8)
+            rgb_pred = torch.zeros((self.image_height, self.image_width, 3)).type(torch.uint8)
             rgb_pred[:, :, 0] = (prediction == 1) * 255  # Red channel
             rgb_pred[:, :, 2] = (prediction == 2) * 255  # Blue channel
             rgb_pred = rgb_pred.detach().cpu().numpy()
-            rgb_mask = torch.zeros(3, 200, 200)  # TODO: remove magic numbers
+            rgb_mask = torch.zeros(3, self.image_height, self.image_width)
             rgb_mask[0] = (gt_mask == 1).float()  # Red channel
             rgb_mask[2] = (gt_mask == 2).float()  # Blue channel
-            rgb_mask = (rgb_mask*255).type(torch.uint8)
+            rgb_mask = (rgb_mask * 255).type(torch.uint8)
             if self.save_imgs:
                 cv.imwrite(self.trainer.log_dir + "/images/" + batch["number"][0] + "_" + batch["side"][0] + "_" + batch["day"][
                     0] + "_E" + str(self.trainer.current_epoch) + ".png", rgb_pred)
@@ -294,8 +254,6 @@ class FreshTwin_lightning(L.LightningModule):
                 "monitor": "train/epoch_loss",
                 "frequency": 1,
                 "interval": "epoch"
-                # If "monitor" references validation metrics, then "frequency" should be set to a
-                # multiple of "trainer.check_val_every_n_epoch".
             },
         }
 
@@ -329,9 +287,6 @@ class FreshTwin_lightning(L.LightningModule):
         self.val_loss = None
         self.val_loss = []
         self.log('val/epoch_loss', val_loss, on_epoch=True)
-        import json
-        with open("low_loss.json", 'w') as f:
-            json.dump(self.high_loss, f)
 
     def on_train_start(self) -> None:
         pass
@@ -348,6 +303,4 @@ class FreshTwin_lightning(L.LightningModule):
 
     def forward(self, image):
         res = self.model.forward(image["image"])
-
-        prediction = torch.argmax(res, dim=0)
         return res
