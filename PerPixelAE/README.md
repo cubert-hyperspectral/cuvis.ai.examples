@@ -21,7 +21,7 @@ Notes on what the validation images show can be found in the ``dataset_notes.md`
 
 ## Model
 
-The model implements a classical anomaly detector in an encoder-decoder paradigm. We provide two configured network sizes, **small** and **large** which define networks with varying numbers of neurons in the fully connected layers. Additionally, the size of the encoding dimension can be configured with the included config file.
+The model implements a classical anomaly detector in an encoder-decoder paradigm. We provide two configured network sizes, **small** and **large** which define networks with varying numbers of neurons in the fully connected layers. Additionally, the size of the encoding dimension can be configured with the included train config yaml file.
 
 ## Prerequisite
 
