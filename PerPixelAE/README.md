@@ -21,7 +21,7 @@ Notes on what the validation images show can be found in the ``dataset_notes.md`
 
 ## Model
 
-The model implements a classical anomaly detector in an encoder-decoder paradigm. We provide two configured network sizes, **small** and **large** which define networks with varying numbers of 
+The model implements a classical anomaly detector in an encoder-decoder paradigm. We provide two configured network sizes, **small** and **large** which define networks with varying numbers of neurons in the fully connected layers. Additionally, the size of the encoding dimension can be configured with the included config file.
 
 ## Prerequisite
 
@@ -33,10 +33,7 @@ their [website](https://pytorch.org/get-started/locally/). This example is teste
 
 ## How to train
 
-After downloading the sample dataset and ImageNet dataset and extracting them into the data folder, the
-``ImageNet_6ch_generator.py`` must be run. This will automatically create a six-channel version of ImageNet.
-
-Now the train.py script can be run.
+After downloading the sample dataset and extracting it into the data folder, we can now run the train.py script.
 
 ```
 train.py -c example_train_config.yaml
@@ -45,11 +42,6 @@ train.py -c example_train_config.yaml
 The `example_train_config.yaml` has every parameter and path in it for the model and dataloader to work.
 If you chose to alter the folder structure, you may need to change some paths in there before the training is able to
 run.
-
-## How to predict data using cuvis.ai
-
-A detailed description of how to infer cubes using our trained model (or any other model in that regard) can be found in
-the `inference.ipynb` notebook.
 
 ## How to create a report for the model and dataset
 
