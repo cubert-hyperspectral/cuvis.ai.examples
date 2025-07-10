@@ -45,7 +45,7 @@ run.
 
 ## How to create a report for the model and dataset
 
-You can use `the report.py` in order to create a report of the model performance and generate a visual representation of
+You can use `report.py` in order to create a report of the model performance and generate a visual representation of
 the outcome.
 The script will create a folder at a specified location, infer the given datasets, and create a visually pleasing output.
 
