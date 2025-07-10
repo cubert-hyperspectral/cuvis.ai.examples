@@ -1,9 +1,8 @@
-# Simple anomaly detection example
+# Simple anomaly detection example with per-pixel AE
 
 ## Introduction
 
-In this example, an anomaly detection model is trained outside cuvis.ai and inference is done using cuvis.ai.
-Since cuvis.ai was not yet ready to train models with, it had to be done separately.
+In this example, we provide a framework to train a deep, per-pixel anomaly detector.
 
 ## The dataset
 
@@ -22,21 +21,7 @@ Notes on what the validation images show can be found in the ``dataset_notes.md`
 
 ## Model
 
-We chose to go with the [EfficientAD](https://arxiv.org/pdf/2303.14535v3) model since it is an exciting, state-of-the-art
-model in anomaly detection.
-
-As a base to build our implementation on, we used the EfficientAD code
-of [Anomlaib](https://github.com/openvinotoolkit/anomalib). In order to make it work with more than three channels, the
-input layers of the model, as well as the given teacher checkpoint, were adapted. The input layer of the model was
-simply expanded to accept 6-channel images. The teacher weights and biases were duplicated and then divided by two to
-get a 6-channel representation of the teacher. We halved the weights and biases of the teacher in order not to get the
-same activation strength out of six channels as we would get out of three channels.
-
-An ImageNet subset, which is used in training, can be
-found [here](https://s3.amazonaws.com/fast-ai-imageclas/imagenette2.tgz). This dataset has to be adapted to six channels
-in order to be used in our training loop. We did this
-by duplicating the
-three RGB channels to get a six-channel image.
+The model implements a classical anomaly detector in an encoder-decoder paradigm. We provide two configured network sizes, **small** and **large** which define networks with varying numbers of 
 
 ## Prerequisite
 
@@ -75,10 +60,3 @@ The script will create a folder at a specified location, infer the given dataset
 ```
 reporting.py -c example_report_config.yaml
 ```
-
-## Results
-
-With the given model weights and dataset, we reached a (INPUT AUROC HERE) image-AUROC. The detection of all
-substances was very good, and we are pleased with the results.
-
-![inference result](../pictures/inference.png)

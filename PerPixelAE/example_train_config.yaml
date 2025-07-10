@@ -16,7 +16,6 @@ white_percentage: 0.55 # Diffuse reflectance of the white target used as referen
 
 ### MODEL ###
 Model:
-  checkpoints: best_teacher_6_channel.pth # checkpoint of the pretrained teacher
   use_large: true # whether to use the large network size
   encoding_dim: 1 # dimension of the encoding dimension
   in_channels: 6 # number of input channels to the model

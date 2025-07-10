@@ -162,7 +162,7 @@ class Report:
                 class_scores[cls].append(score_map[mask])
                 class_truths[cls].append(np.ones(np.count_nonzero(mask)))
                 # Add negative samples from other classes
-                neg_mask = (gt_mask != cls) & (gt_mask != 0)
+                neg_mask = (gt_mask == 0)
                 class_scores[cls].append(score_map[neg_mask])
                 class_truths[cls].append(np.zeros(np.count_nonzero(neg_mask)))
 
@@ -179,7 +179,6 @@ class Report:
             if len(np.unique(y_true)) < 2:
                 print(f"Skipping class {cls}: insufficient positive/negative pixels")
                 continue
-
             fpr, tpr, _ = roc_curve(y_true, y_scores)
             roc_auc = auc(fpr, tpr)
             aucs[cls] = roc_auc
@@ -217,13 +216,10 @@ class Report:
         all_labels = []
         all_truths = []
         all_scores = []
-        for dataset_path, labels_path in zip(config['datasets'], config['labels']):
+        for dataset_path in config['datasets']:
             data_path = Path(dataset_path)
             cubes = glob.glob(str(data_path/ "*" / "*.cu3s"))
             cube_names = [Path(image).name for image in cubes]
-            # Load only the PNG masks associated with the labels
-            truth_labels = glob.glob(f'{labels_path}/*.png')
-            truth_labels_names = [Path(image).name for image in truth_labels]
             dataset_name = data_path.name
 
             # create dataset and infer the cubes
