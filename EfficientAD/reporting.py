@@ -166,8 +166,10 @@ class Report:
                 mask = (gt_mask == cls)
                 class_scores[cls].append(score_map[mask])
                 class_truths[cls].append(np.ones(np.count_nonzero(mask)))
-                # Add negative samples from other classes
-                neg_mask = (gt_mask != cls) & (gt_mask != 0)
+                # Add negative samples from other classes pixels that are labeled as background, but labeled as anomaly
+                
+                # NEGATIVE = THINGS WE DON'T WANT TO DETECT
+                neg_mask = gt_mask == 0
                 class_scores[cls].append(score_map[neg_mask])
                 class_truths[cls].append(np.zeros(np.count_nonzero(neg_mask)))
 

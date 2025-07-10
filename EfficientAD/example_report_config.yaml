@@ -1,7 +1,7 @@
 name: test # name of the report
 
 ### DATASET ###
-datasets: [ /home/nathaniel/Downloads/bedding_dataset/exported/val ]
+datasets: [ /home/nathaniel/cubert/cuvis.ai.examples/data/bedding_dataset/exported/val ]
 labels: [ /home/nathaniel/Downloads/labels ]
 normalize: True # weather to normalize the data or not before putting it through the network
 means: [ 0.31257936, 0.43269954, 0.50889452, 0.64886759, 0.5958548, 0.39783356 ] # calculated mean per channel for the given dataset
