@@ -6,12 +6,13 @@ import torchvision.transforms
 from UNet_2D import FreshTwin2DUNet
 import torch
 from torchmetrics.segmentation import DiceScore, MeanIoU
-from torchmetrics.classification import AveragePrecision, Accuracy
+from torchmetrics.classification import AveragePrecision, Accuracy, ROC, AUROC
 from torchvision.transforms.functional import equalize
 import torch.nn.functional as F
 import cv2 as cv
 from gpu_pca import IncrementalPCAonGPU as IncPca
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 
 class GeneralizedDiceLoss(torch.nn.Module):
@@ -50,7 +51,16 @@ class GeneralizedDiceLoss(torch.nn.Module):
         # Compute class weights: 1 / (sum of ground truth per class)^2
         gt_sum = targets_flat.sum(-1)  # [B, C]
         # class_weights = 1.0 / (gt_sum ** 2 + self.epsilon)  # [B, C]
-        class_weights = torch.tensor([0, 1, 1, 1], device="cuda")  # [B, C]
+        class_weights = gt_sum.sum()/gt_sum
+        class_weights = class_weights[0]
+        # class_weights[0] = 0
+        class_weights[3] = 0
+        if class_weights[2] > 10000:
+            class_weights[2] = 10000
+        if class_weights[1] > 10000:
+            class_weights[1] = 10000
+        #class_weights = torch.tensor([0, 1, 1000, 0], device="cuda")  # [B, C]
+        #class_weights = torch.tensor([0, 1, 1, 1], device="cuda")  # [B, C]
 
         # Numerator and denominator
         intersection = (inputs_flat * targets_flat).sum(-1)  # [B, C]
@@ -68,7 +78,7 @@ class GeneralizedDiceLoss(torch.nn.Module):
 
         return loss.mean()
 
-class FreshTwin_lightning(L.LightningModule):
+class Strawberry_lightning(L.LightningModule):
     def __init__(self, config, data_loader):
         super().__init__()
         self.pca_channels = config["pca_channels"]
@@ -78,7 +88,8 @@ class FreshTwin_lightning(L.LightningModule):
         self.weight_decay = config["weight_decay"]
 
         # TODO: decide wich metrics are relevant and remove some
-        # TODO: add ROC and AU-ROC
+        self.roc = ROC(task='multiclass', num_classes=config["num_classes"])
+        self.auroc = AUROC(task='multiclass', num_classes=config["num_classes"])
         self.ap = AveragePrecision(task='multiclass', num_classes=config["num_classes"])
         self.acc1 = Accuracy(task='multiclass', num_classes=config["num_classes"], threshold=0.1)
         self.acc2 = Accuracy(task='multiclass', num_classes=config["num_classes"], threshold=0.2)
@@ -108,8 +119,6 @@ class FreshTwin_lightning(L.LightningModule):
         self.image_height, self.image_width = config["cube_size"]
 
     def calc_pca(self, cube):
-
-        # TODO: stream line this
         pca_image = cube.squeeze(0).permute(1, 2, 0).reshape(-1, self.cube_channels)
         pca_image = self.pca.transform(pca_image)
         pca_image = pca_image.reshape(1, self.image_height, self.image_width, self.pca_channels).permute(0, 3, 1, 2).type(torch.float16)
@@ -122,6 +131,7 @@ class FreshTwin_lightning(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         input_image = self.calc_pca(batch["image"])
+        # input_image = batch["image"][:,:32]
         res = self.model.forward(input_image)
         pred = torch.softmax(res, dim=0)
 
@@ -169,6 +179,7 @@ class FreshTwin_lightning(L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         input_image = self.calc_pca(batch["image"])
+        #input_image = batch["image"][:,:32]
         res = self.model.forward(input_image)
         gt_mask = batch['mask']
         pred = torch.softmax(res, dim=0).unsqueeze(0)
@@ -204,6 +215,8 @@ class FreshTwin_lightning(L.LightningModule):
         self.acc4.update(res.unsqueeze(0), gt_mask)
         self.acc5.update(res.unsqueeze(0), gt_mask)
 
+        self.roc.update(res.unsqueeze(0), gt_mask)
+        self.auroc.update(res.unsqueeze(0), gt_mask)
 
         if batch_idx % 10 == 0:
             input_img = batch["image"][0, 0].unsqueeze(0)
@@ -250,7 +263,7 @@ class FreshTwin_lightning(L.LightningModule):
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
-                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min'),
+                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2),
                 "monitor": "train/epoch_loss",
                 "frequency": 1,
                 "interval": "epoch"
@@ -282,6 +295,12 @@ class FreshTwin_lightning(L.LightningModule):
         self.log('val_F1/t=0.3', self.dice3, on_epoch=True)
         self.log('val_F1/t=0.4', self.dice4, on_epoch=True)
         self.log('val_F1/t=0.5', self.dice5, on_epoch=True)
+
+        self.log('val_ROC/AUROC', self.auroc, on_epoch=True)
+        roc_fig, _ = self.roc.plot(score=True)
+        self.logger.experiment.add_figure('curve/ROC', roc_fig, global_step=self.global_step)
+        plt.close(roc_fig)
+        self.roc.reset()
 
         val_loss = sum(self.val_loss) / len(self.val_loss)
         self.val_loss = None

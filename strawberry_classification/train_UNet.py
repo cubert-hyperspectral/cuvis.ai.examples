@@ -1,9 +1,9 @@
 import argparse
 import yaml
 import lightning as L
-from FreshTwin_lightning import FreshTwin_lightning
+from Strawberry_lightning import Strawberry_lightning
 from torch.utils.data import DataLoader
-from FreshTwinCuvisDataset import FreshTwinCuvisDataset
+from StrawberryCuvisDataset import StrawberryCuvisDataset
 from lightning.pytorch.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from pathlib import Path
@@ -22,11 +22,20 @@ def parse_args(args):
         config = yaml.safe_load(f)
     return config
 
+
 def main():
     args = get_arguments()
     config = parse_args(args)
 
-    full_dataset = FreshTwinCuvisDataset(Path(config["data_path"]), white_path=config["white_path"], dark_path=config["dark_path"], cube_size=config["cube_size"])
+    full_dataset = StrawberryCuvisDataset(Path(config["data_path"]),
+                                          white_path=config["white_path"],
+                                          dark_path=config["dark_path"],
+                                          cube_size=config["cube_size"],
+                                          strawberry_range=tuple(config["strawberry_range"]),
+                                          sides_to_exclude=config["sides_to_exclude"],
+                                          days_to_exclude=config["days_to_exclude"],
+                                          mean=config["mean"],
+                                          std=config["std"],)
 
     train_size = int(0.8 * len(full_dataset))
     test_size = len(full_dataset) - train_size
@@ -46,7 +55,9 @@ def main():
     )
     logger = TensorBoardLogger(save_dir=config["logger_dir"], log_graph=True, name=config['name'])
 
-    model = FreshTwin_lightning(config,  DataLoader(full_dataset, batch_size=config["batch_size"], shuffle=False, num_workers=0, persistent_workers=False))
+    model = Strawberry_lightning(config,
+                                 DataLoader(full_dataset, batch_size=config["batch_size"], shuffle=False, num_workers=0, persistent_workers=False))
+
 
     trainer = L.Trainer(logger=logger,
                         max_steps=config["max_steps"],

@@ -37,7 +37,21 @@ class FreshTwin2DUNet(nn.Module):
             nn.Conv2d(256, 256, kernel_size=3, padding=1),
             nn.ReLU()
         )
+        self.pool4 = nn.MaxPool2d(2)
 
+        self.conv5 = nn.Sequential(
+            nn.Conv2d(256, 512, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, padding=1),
+            nn.ReLU()
+        )
+        self.up8 = nn.ConvTranspose2d(512, 256, 2, stride=2)
+        self.conv8 = nn.Sequential(
+            nn.Conv2d(512, 256, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.ReLU()
+        )
         self.up9 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
         self.conv9 = nn.Sequential(
             nn.Conv2d(256, 128, kernel_size=3, padding=1),
@@ -75,13 +89,21 @@ class FreshTwin2DUNet(nn.Module):
         p3 = self.pool3(c3)
 
         c4 = self.conv4(p3)
+        p4 = self.pool4(c4)
+
+        c5 = self.conv5(p4)
+
 
         # Classification output
         # flat = torch.flatten(c4, 1)
         # out1 = F.softmax(self.output_1(flat), dim=1)
 
         # Decoder
-        u9 = self.up9(c4)
+        u8 = self.up8(c5)
+        u8 = torch.cat([u8, c4], dim=1)
+        c8 = self.conv8(u8)
+
+        u9 = self.up9(c8)
         u9 = torch.cat([u9, c3], dim=1)
         c9 = self.conv9(u9)
 
