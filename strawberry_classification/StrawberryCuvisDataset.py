@@ -11,11 +11,10 @@ class StrawberryCuvisDataset(Dataset):
                  root_dir: Path,
                  mean: list = None,
                  std: list = None,
-                 max_img_shape: int = 2000,
                  normalize: bool = False,
                  white_path: str = None,
                  dark_path: str = None,
-                 cube_size=None,
+                 cube_size: list = None,
                  cube_rgb_channels=None,
                  strawberry_range: tuple = (0, 220),
                  sides_to_exclude: list = None,
@@ -46,7 +45,6 @@ class StrawberryCuvisDataset(Dataset):
                         file_path.stem + "_0000_Strawberry_swir_fasterRGB_mask.npy")  # TODO: rename mask files and change here
         self.mean = mean
         self.std = std
-        self.max_img_shape = max_img_shape
         self.normalize = normalize
         self.proc = None
         self.white_path = white_path
@@ -77,8 +75,8 @@ class StrawberryCuvisDataset(Dataset):
         cube = cube / 10000  # 100% reflectance equals 10000, we divide by that to make 100% reflectance equal 1
         if self.normalize:  # TODO: check if we want to normalize
             cube = torchvision.transforms.Normalize(mean=self.mean, std=self.std)(cube)
-        if cube.shape[1] > self.max_img_shape or cube.shape[2] > self.max_img_shape:
-            cube = torchvision.transforms.Resize(size=self.max_img_shape - 1, max_size=self.max_img_shape)(cube)
+        if cube.shape[1] != self.height or cube.shape[2] != self.width:
+            cube = torchvision.transforms.Resize(size=[self.height, self.width])(cube)
         rgb = torch.zeros(3, self.height, self.width)
         rgb[0] = cube[self.cube_rgb_channels[0]]
         rgb[1] = cube[self.cube_rgb_channels[1]]
