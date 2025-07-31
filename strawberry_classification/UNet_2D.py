@@ -99,11 +99,11 @@ class FreshTwin2DUNet(nn.Module):
         # out1 = F.softmax(self.output_1(flat), dim=1)
 
         # Decoder
-        u8 = self.up8(c5)
-        u8 = torch.cat([u8, c4], dim=1)
-        c8 = self.conv8(u8)
+        #u8 = self.up8(c5)
+        #u8 = torch.cat([u8, c4], dim=1)
+        #c8 = self.conv8(u8)
 
-        u9 = self.up9(c8)
+        u9 = self.up9(c4)
         u9 = torch.cat([u9, c3], dim=1)
         c9 = self.conv9(u9)
 

@@ -84,4 +84,4 @@ class StrawberryCuvisDataset(Dataset):
 
         mask = torch.tensor(cv.resize(np.load(self.masks[file_path]),(self.height, self.width),interpolation=cv.INTER_NEAREST), device="cuda")
 
-        return {"image": cube, "mask": mask, "number": file_name[1], "side": file_name[2], "day": file_name[3], "rgb_image": rgb}
+        return {"image": cube, "mask": mask, "number": file_name[1], "side": file_name[2], "day": file_name[3], "rgb_image": rgb, "name": file_path.stem}

@@ -54,13 +54,13 @@ class GeneralizedDiceLoss(torch.nn.Module):
         class_weights = gt_sum.sum()/gt_sum
         class_weights = class_weights[0]
         # class_weights[0] = 0
-        class_weights[3] = 0
+        #class_weights[3] = 0
         if class_weights[2] > 10000:
             class_weights[2] = 10000
         if class_weights[1] > 10000:
             class_weights[1] = 10000
         #class_weights = torch.tensor([0, 1, 1000, 0], device="cuda")  # [B, C]
-        #class_weights = torch.tensor([0, 1, 1, 1], device="cuda")  # [B, C]
+        class_weights = torch.tensor([0, 1, 1], device="cuda")  # [B, C]
 
         # Numerator and denominator
         intersection = (inputs_flat * targets_flat).sum(-1)  # [B, C]
@@ -84,10 +84,11 @@ class Strawberry_lightning(L.LightningModule):
         self.pca_channels = config["pca_channels"]
         self.cube_channels = config["cube_channels"]
         self.model = FreshTwin2DUNet(in_channels=config["pca_channels"], num_classes=config["num_classes"])
-        self.learning_rate = config["learning_rate"]
-        self.weight_decay = config["weight_decay"]
+        self.learning_rate = config["learning_rate"] if "learning_rate" in config else 1e-3
+        self.weight_decay = config["weight_decay"] if "weight_decay" in config else 1e-5
+        self.num_classes = config["num_classes"]
 
-        # TODO: decide wich metrics are relevant and remove some
+        # TODO: decide which metrics are relevant and remove some
         self.roc = ROC(task='multiclass', num_classes=config["num_classes"])
         self.auroc = AUROC(task='multiclass', num_classes=config["num_classes"])
         self.ap = AveragePrecision(task='multiclass', num_classes=config["num_classes"])
@@ -136,7 +137,7 @@ class Strawberry_lightning(L.LightningModule):
         pred = torch.softmax(res, dim=0)
 
 
-        one_hot_gt = torch.nn.functional.one_hot(batch["mask"].type(torch.long), num_classes=4).movedim(-1, 1)
+        one_hot_gt = torch.nn.functional.one_hot(batch["mask"].type(torch.long), num_classes=self.num_classes).movedim(-1, 1)
 
         if batch["number"][0] + "_" + batch["side"][0] + "_" + batch["day"][0] == "008_3_22" and False or self.save_imgs:
 
@@ -149,6 +150,7 @@ class Strawberry_lightning(L.LightningModule):
             prediction = torch.argmax(res, dim=0, keepdim=True)
             rgb_pred = torch.zeros((self.image_height, self.image_width, 3)).type(torch.uint8)
             rgb_pred[:, :, 0] = (prediction == 1) * 255  # Red channel
+            rgb_pred[:, :, 1] = (prediction == 3) * 255  # Green channel
             rgb_pred[:, :, 2] = (prediction == 2) * 255  # Blue channel
             rgb_pred = rgb_pred.detach().cpu().numpy()
             if self.save_imgs:
@@ -183,13 +185,13 @@ class Strawberry_lightning(L.LightningModule):
         res = self.model.forward(input_image)
         gt_mask = batch['mask']
         pred = torch.softmax(res, dim=0).unsqueeze(0)
-        one_hot_gt = torch.nn.functional.one_hot(gt_mask.type(torch.long), num_classes=4).movedim(-1, 1)
+        one_hot_gt = torch.nn.functional.one_hot(gt_mask.type(torch.long), num_classes=self.num_classes).movedim(-1, 1)
         loss = GeneralizedDiceLoss(generalize=True)(pred, one_hot_gt).item()
         self.val_loss.append(loss)
 
         prediction = torch.argmax(res, dim=0, keepdim=True)
 
-        one_hot_pred = torch.nn.functional.one_hot(prediction.type(torch.long), num_classes=4).movedim(-1, 1)
+        one_hot_pred = torch.nn.functional.one_hot(prediction.type(torch.long), num_classes=self.num_classes).movedim(-1, 1)
 
         self.dice.update(one_hot_pred, one_hot_gt)
         self.dice_bg.update(one_hot_pred > 0.5, one_hot_gt)
@@ -321,5 +323,5 @@ class Strawberry_lightning(L.LightningModule):
         pass
 
     def forward(self, image):
-        res = self.model.forward(image["image"])
+        res = self.model.forward(self.calc_pca(image["image"]))
         return res
