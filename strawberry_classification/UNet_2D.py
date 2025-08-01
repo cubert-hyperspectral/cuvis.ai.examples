@@ -89,9 +89,9 @@ class FreshTwin2DUNet(nn.Module):
         p3 = self.pool3(c3)
 
         c4 = self.conv4(p3)
-        p4 = self.pool4(c4)
+        #p4 = self.pool4(c4)
 
-        c5 = self.conv5(p4)
+        #c5 = self.conv5(p4)
 
 
         # Classification output

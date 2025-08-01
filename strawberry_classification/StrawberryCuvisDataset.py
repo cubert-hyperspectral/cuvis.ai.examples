@@ -73,7 +73,7 @@ class StrawberryCuvisDataset(Dataset):
         cube = torch.from_numpy(mesu.data["cube"].array).to("cuda")
         cube = cube.permute(2, 0, 1)  # transpose from H x W x C to C x H x W for torch
         cube = cube / 10000  # 100% reflectance equals 10000, we divide by that to make 100% reflectance equal 1
-        if self.normalize:  # TODO: check if we want to normalize
+        if self.normalize:
             cube = torchvision.transforms.Normalize(mean=self.mean, std=self.std)(cube)
         if cube.shape[1] != self.height or cube.shape[2] != self.width:
             cube = torchvision.transforms.Resize(size=[self.height, self.width])(cube)

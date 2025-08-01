@@ -6,7 +6,7 @@ logger_dir: "../data/logs"
 max_steps: 200000
 pca_channels: 32
 cube_channels: 38
-cube_size: [200,200]
+cube_size: [192,192]
 num_classes: 3
 white_path: "D:/FreshTwin/22_04_25_cleaned/session_009/swir/white_001.cu3s"
 dark_path: "D:/FreshTwin/22_04_25_cleaned/session_009/swir/dark_002.cu3s"
