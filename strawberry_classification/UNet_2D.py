@@ -4,9 +4,10 @@ import torch.nn.functional as F
 
 
 class FreshTwin2DUNet(nn.Module):
-    def __init__(self, in_channels, num_classes, *args, **kwargs):
+    def __init__(self, in_channels, num_classes,pca = None, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
+        self.pca = pca
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, 32, kernel_size=3, padding=1),
             nn.ReLU(),
@@ -76,10 +77,15 @@ class FreshTwin2DUNet(nn.Module):
             nn.ReLU()
         )
         self.output_2 = nn.Conv2d(32, num_classes, kernel_size=1)
+        self.in_channels = in_channels
 
     def forward(self, x):
         # Encoder
-        c1 = self.conv1(x)
+        pca_image = x.squeeze(0).permute(1, 2, 0).reshape(-1, x.shape[1])
+        pca_image = self.pca.transform(pca_image)
+        pca_image = pca_image.reshape(1, x.shape[2], x.shape[3], self.in_channels).permute(0, 3, 1, 2).type(torch.float32)
+
+        c1 = self.conv1(pca_image)
         p1 = self.pool1(c1)
 
         c2 = self.conv2(p1)
@@ -89,19 +95,6 @@ class FreshTwin2DUNet(nn.Module):
         p3 = self.pool3(c3)
 
         c4 = self.conv4(p3)
-        #p4 = self.pool4(c4)
-
-        #c5 = self.conv5(p4)
-
-
-        # Classification output
-        # flat = torch.flatten(c4, 1)
-        # out1 = F.softmax(self.output_1(flat), dim=1)
-
-        # Decoder
-        #u8 = self.up8(c5)
-        #u8 = torch.cat([u8, c4], dim=1)
-        #c8 = self.conv8(u8)
 
         u9 = self.up9(c4)
         u9 = torch.cat([u9, c3], dim=1)
@@ -115,15 +108,10 @@ class FreshTwin2DUNet(nn.Module):
         u11 = torch.cat([u11, c1], dim=1)
         c11 = self.conv11(u11)
 
-        # Reshape for 2D conv
-        # b = 1
-        # ch, d, h, w = c11.shape
+
         b, ch, h, w = c11.shape
         c11 = c11.reshape(b* ch,  h, w)
-        # c11 = c11.permute(0, 2, 3, 4, 1).reshape(b, d, h, w, ch).reshape(b * d, h, w, ch)
-        # c11 = c11.permute(0, 3, 1, 2)  # NCHW for Conv2d
 
-        out2 = self.output_2(c11)
-        # out2 = out2.view(b, d, 4, h, w).permute(0, 2, 1, 3, 4)  # (B, 10, D, H, W)
-
-        return out2  # , out1
+        out = self.output_2(c11)
+       
+        return out

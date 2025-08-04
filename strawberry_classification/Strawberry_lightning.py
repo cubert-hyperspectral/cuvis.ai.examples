@@ -16,10 +16,11 @@ import matplotlib.pyplot as plt
 
 
 class GeneralizedDiceLoss(torch.nn.Module):
-    def __init__(self, epsilon=1e-6, generalize=False):
+    def __init__(self, epsilon=1e-6, generalize=False,mode = None):
         super(GeneralizedDiceLoss, self).__init__()
         self.epsilon = epsilon
         self.generalize = generalize
+        self.mode = mode
 
     def forward(self, inputs, targets):
         """
@@ -49,18 +50,11 @@ class GeneralizedDiceLoss(torch.nn.Module):
         targets_flat = targets.view(B, C, -1)
 
         # Compute class weights: 1 / (sum of ground truth per class)^2
-        gt_sum = targets_flat.sum(-1)  # [B, C]
-        # class_weights = 1.0 / (gt_sum ** 2 + self.epsilon)  # [B, C]
-        class_weights = gt_sum.sum()/gt_sum
-        class_weights = class_weights[0]
-        # class_weights[0] = 0
-        #class_weights[3] = 0
-        if class_weights[2] > 10000:
-            class_weights[2] = 10000
-        if class_weights[1] > 10000:
-            class_weights[1] = 10000
-        #class_weights = torch.tensor([0, 1, 1000, 0], device="cuda")  # [B, C]
-        class_weights = torch.tensor([0, 1, 1], device="cuda")  # [B, C]
+        if self.mode == "advanced":
+            gt_sum = targets_flat.sum(-1)  # [B, C]
+            class_weights = 1.0 / (gt_sum ** 2 + self.epsilon)  # [B, C]
+        else :
+            class_weights = torch.tensor([0, 1, 1], device="cuda")  # [B, C]
 
         # Numerator and denominator
         intersection = (inputs_flat * targets_flat).sum(-1)  # [B, C]
@@ -83,10 +77,11 @@ class Strawberry_lightning(L.LightningModule):
         super().__init__()
         self.pca_channels = config["pca_channels"]
         self.cube_channels = config["cube_channels"]
-        self.model = FreshTwin2DUNet(in_channels=config["pca_channels"], num_classes=config["num_classes"])
+        self.pca = IncPca(n_components=self.pca_channels)
         self.learning_rate = config["learning_rate"] if "learning_rate" in config else 1e-3
         self.weight_decay = config["weight_decay"] if "weight_decay" in config else 1e-5
         self.num_classes = config["num_classes"]
+        self.model = FreshTwin2DUNet(in_channels=self.pca_channels, num_classes=self.num_classes, pca=self.pca)
 
         # TODO: decide which metrics are relevant and remove some
         self.roc = ROC(task='multiclass', num_classes=config["num_classes"])
@@ -116,7 +111,6 @@ class Strawberry_lightning(L.LightningModule):
         self.train_loss = []
         self.save_imgs = False
         self.data_loader = data_loader
-        self.pca = IncPca(n_components=self.pca_channels)
         self.image_height, self.image_width = config["cube_size"]
 
     def calc_pca(self, cube):
@@ -126,14 +120,14 @@ class Strawberry_lightning(L.LightningModule):
         return pca_image
 
     def setup(self, stage):
-        for batch in tqdm(self.data_loader, desc="PCA fit"):
-            pca_image = batch["image"].squeeze(0).permute(1, 2, 0).reshape(-1, self.cube_channels)
-            self.pca.partial_fit(pca_image)
+        if self.pca.n_samples_seen_ == 0:
+            for batch in tqdm(self.data_loader, desc="PCA fit"):
+                pca_image = batch["image"].squeeze(0).permute(1, 2, 0).reshape(-1, self.cube_channels)
+                self.pca.partial_fit(pca_image)
+
 
     def training_step(self, batch, batch_idx):
-        input_image = self.calc_pca(batch["image"])
-        # input_image = batch["image"][:,:32]
-        res = self.model.forward(input_image)
+        res = self.model.forward(batch["image"])
         pred = torch.softmax(res, dim=0)
 
 
@@ -180,9 +174,7 @@ class Strawberry_lightning(L.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        input_image = self.calc_pca(batch["image"])
-        #input_image = batch["image"][:,:32]
-        res = self.model.forward(input_image)
+        res = self.model.forward(batch["image"])
         gt_mask = batch['mask']
         pred = torch.softmax(res, dim=0).unsqueeze(0)
         one_hot_gt = torch.nn.functional.one_hot(gt_mask.type(torch.long), num_classes=self.num_classes).movedim(-1, 1)
@@ -323,5 +315,12 @@ class Strawberry_lightning(L.LightningModule):
         pass
 
     def forward(self, image):
-        res = self.model.forward(self.calc_pca(image["image"]))
+        res = self.model.forward(image["image"])
         return res
+
+    def on_save_checkpoint(self, checkpoint):
+        checkpoint['pca'] = self.pca
+
+    def on_load_checkpoint(self, checkpoint):
+        self.pca = checkpoint['pca']
+        self.model.pca = checkpoint['pca']

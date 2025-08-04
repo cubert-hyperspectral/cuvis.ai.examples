@@ -1,5 +1,101 @@
-# Classification example
+# Classifiction example
 
 ## Introduction
 
-In this example, we used a UNet model to find bruised and unbruised areas in Strawberries. 
+In this example, we used a UNet model to find bruised and unbruised areas in Strawberries.
+Since cuvis.ai was not yet ready to train models with, it had to be done separately. But we provide a notebook which
+walks you through how to load an externally trained deep neural network and use it to infer a datacube
+
+## The dataset
+
+In our example dataset we used the cubert SWIR-1 camera wich creates 38 channel cubes. They range from 900nm up to
+1646nm.
+
+The dataset is aimed at food inspection problems. Approximately 450 Strawberries were harvested on a farm near Ulm and
+via human inspection the best 220 Strawberries were selected. We classified a strawberry as good if it had no visible
+signs of bruising and the whole fruit showed a red color.
+We then treated 100 strawberries with a vacuum sealer to apply uniform pressure to the whole fruit in order to have
+completely bruised fruits.
+Another 20 strawberries were treated with a steel ball rolling down an angled slope to hit the strawberry in the end.
+
+All strawberries are placed on custom, 3D printed, hexagonal trays. The fruits are fixed in place and every side of the
+tray has a number from 1 to 6 engraved in it.  
+Therefore we can identify the side of the strawberry at any time and can compare the state of each strawberry side over
+the five days of the data acquisition campaign.
+
+All the SWIR images are labeled. These labels are to be taken with a little caveat: We used an RGB representation of
+the data to label the data using Segment Anything and only fine-tuned the labels afterwards. To simplify the labeling
+process and decrease time spent, we assumed that all 100 non-treated fruits are completely bruise free and the 100
+vacuum treated strawberries consist of only bruised material. This simplification leads to some errors in the ground
+truth and therefore spikes in the loss of our model where it predicts bruising on "good" strawberries (and might even be
+right about it).
+The last 20 strawberries of the dataset are the ones treated with the steel ball. They have also been labeled more
+thoroughly using an early version of our model to try and find all bruises (not only the ones inflicted by us).
+In the file ``dataset_notes.md`` you can find the notes on which of the bruises on these 20 fruits was inflicted using
+the steel ball.
+
+The dataset and pretrained model weights can be
+downloaded [here](https://drive.google.com/drive/folders/1bTNNSiFBQdPLgFlt3DHt06KmShmeTftj?usp=drive_link). !!!!!!!!
+UPDATE THIS LINK !!!!!!!!
+
+## Model
+
+We chose to go with the [UNet](https://arxiv.org/pdf/1505.04597) model since it is a proven, simple and good
+performing segmentation tool that is also applicable for hyperspectral data.
+
+Our implementation consists of 4 pooling and upconvolution layers. We trained our model with only three classes since
+the mold class is very underrepresented in our dataset and did not increase our classification result. We therefore
+dropped the class and excluded the last day of data acquisition since it was the only day when some strawberries were
+moldy.
+
+## Prerequisite
+
+This example is written using Python version 3.12 and cuvis SDK version 3.3.1, which can be
+downloaded [here](https://cloud.cubert-gmbh.de/s/qpxkyWkycrmBK9m?path=%2FCuvis%203.3.1).
+
+To get this example running, please install PyTorch with CUDA support from
+their [website](https://pytorch.org/get-started/locally/). This example is tested for PyTorch version 2.6.0+cu124.
+
+## How to train
+
+After downloading the sample dataset and extracting it into the data folder, the train.py script can be run.
+
+```
+train.py -c example_train_config.yaml
+```
+
+The `example_train_config.yaml` has every parameter and path in it for the model and dataloader to work.
+If you chose to alter the folder structure, you may need to change some paths in there before the training is able to
+run.
+
+## How to predict data using cuvis.ai
+
+A detailed description of how to infer cubes using our trained model (or any other model in that regard) can be found in
+the `inference.ipynb` notebook.
+
+## How to create a report for the model and dataset
+
+You can use the `report.py` in order to create a report of the model performance and generate a visual representation of
+the outcome.
+The script will create a folder at a specified location, infer the given datasets, and create a visually pleasing
+output. Changing the folder, metrics or thresholds can be done in the ``example_report_config.yaml``. If the provided
+metrics don't suffice you can also just add your own following our examples.
+
+```
+reporting.py -c example_report_config.yaml
+```
+
+## Results !!!THIS NEEDS TO BE REDONE !!!
+
+With the given model weights and dataset, we reached a 0.93 image-AUROC and a 0.91 pixel-AUROC. Most of the anomalies
+were detected correctly, only some were hardly detectable by the model.
+
+![inference ROC](README_images/AUROC_Class.jpg)
+Inference ROC over all classes present in our validation dataset.
+
+![inference result](README_images/inference.jpg)
+Here we can see a detection result for an image with mixed PLA cubes ranging in size and color. We can see that the
+bigger cubes are easily detected, while the smallest cubes (2mm) are only detected with higher thresholds. Also for
+black PLA only the edges of the cube are detected.
+
+Both images were created by the `report.py` script.
