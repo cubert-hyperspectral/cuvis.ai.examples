@@ -25,7 +25,7 @@ class Metrics(Enum):
 class Report:
     def __init__(self,
                  config: dict,
-                 model: torch.nn.Module,
+                 model: torch.nn.Module | L.LightningModule,
                  trainer: L.Trainer,
                  reporting_root_folder: Path,
                  dataset: torch.utils.data.Dataset,
@@ -66,13 +66,13 @@ class Report:
 
         metrics = {}
         dataset_name = self.dataset_path.name
-        test_loader = DataLoader(self.dataset, batch_size=1, shuffle=False, num_workers=self.config["num_workers"], persistent_workers=self.config["num_workers"] > 0)
-        predictions = self.trainer.predict(self.model, test_loader)
+        report_loader = DataLoader(self.dataset, batch_size=1, shuffle=False, num_workers=self.config["num_workers"], persistent_workers=self.config["num_workers"] > 0)
+        predictions = self.trainer.predict(self.model, report_loader)
         target_folder = self.reporting_run_folder / dataset_name
         if not target_folder.is_dir():
             target_folder.mkdir(parents=True, exist_ok=True)
         if self.create_images:
-            for j, batch in enumerate(tqdm.tqdm(test_loader, desc=f"creating images")):
+            for j, batch in enumerate(tqdm.tqdm(report_loader, desc=f"creating images")):
                 pred = predictions[j]
                 inference_image, _ = self.create_inference_png(batch, pred, task=self.task)
                 inference_image.savefig(target_folder / (batch["name"][0] + ".png"), bbox_inches='tight')
@@ -83,7 +83,7 @@ class Report:
             if Metrics(metric) not in self.metrics:
                 raise ValueError(f"Metric {metric} not defined")
             else:
-                metric_result, metric_plt = self.metrics[Metrics(metric)](test_loader, predictions)
+                metric_result, metric_plt = self.metrics[Metrics(metric)](report_loader, predictions)
                 metrics[metric] = metric_result
                 if metric_plt:
                     metric_plt.savefig(target_folder / (metric + ".png"))
@@ -140,7 +140,7 @@ class Report:
             ax[num][1].set_visible(True)
         return fig, ax
 
-    def roc(self, data_loader, predictions) -> [float, plt.figure]:
+    def roc(self, data_loader: DataLoader, predictions: list[torch.tensor]) -> [float, plt.figure]:
         if self.task == "segmentation":
             roc = torchmetrics.classification.MulticlassROC(self.num_classes).to(self.device)
             auroc = torchmetrics.classification.MulticlassAUROC(self.num_classes, average=None).to(self.device)
@@ -171,7 +171,7 @@ class Report:
 
         return auroc_dict, roc_fig
 
-    def dice(self, data_loader, predictions) -> [float, plt.figure]:
+    def dice(self, data_loader: DataLoader, predictions: list[torch.tensor]) -> [float, plt.figure]:
         dice_func = torchmetrics.Dice(ignore_index=0).to(self.device)
         cum_sum = 0
         total_sum = 0
@@ -189,7 +189,7 @@ class Report:
         dice_func.reset()
         return float(dice_score), None
 
-    def per_class_anomaly_auroc(self, data_loader, predictions) -> [float, plt.figure]:
+    def per_class_anomaly_auroc(self, data_loader: DataLoader, predictions: list[torch.tensor]) -> [float, plt.figure]:
         roc = torchmetrics.classification.MulticlassROC(num_classes=self.num_classes).to(self.device)
         auroc = torchmetrics.classification.MulticlassAUROC(num_classes=self.num_classes).to(self.device)
         for label, label_name in enumerate(self.class_map):
@@ -206,7 +206,7 @@ class Report:
         roc.reset()
         return float(result), plot
 
-    def per_class_dice(self, data_loader, predictions) -> [float, plt.figure]:
+    def per_class_dice(self, data_loader: DataLoader, predictions: list[torch.tensor]) -> [float, plt.figure]:
         all_dice = {}
         for label, label_name in enumerate(self.class_map):
             dice = torchmetrics.Dice(ignore_index=0).to(self.device)
