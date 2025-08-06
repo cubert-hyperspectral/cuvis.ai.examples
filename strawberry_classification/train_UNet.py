@@ -35,15 +35,15 @@ def main():
                                           sides_to_exclude=config["sides_to_exclude"],
                                           days_to_exclude=config["days_to_exclude"],
                                           mean=config["mean"],
-                                          std=config["std"],)
+                                          std=config["std"])
 
     train_size = int(0.8 * len(full_dataset))
     test_size = len(full_dataset) - train_size
-    train_data, test_data = torch.utils.data.random_split(full_dataset, [train_size, test_size], generator=torch.Generator().manual_seed(42))
+    train_data, test_data = torch.utils.data.random_split(full_dataset, [train_size, test_size], generator=torch.Generator().manual_seed(config["seed"]))
 
-    train_loader = DataLoader(train_data, batch_size=config["batch_size"], shuffle=True, num_workers=0, persistent_workers=False)
+    train_loader = DataLoader(train_data, batch_size=config["batch_size"], shuffle=True, num_workers=config["num_workers"], persistent_workers=config["num_workers"] > 0)
 
-    test_loader = DataLoader(test_data, batch_size=config["batch_size"], shuffle=False, num_workers=0, persistent_workers=False)
+    test_loader = DataLoader(test_data, batch_size=config["batch_size"], shuffle=False, num_workers=config["num_workers"], persistent_workers=config["num_workers"] > 0)
 
     checkpoint_callback = ModelCheckpoint(
         monitor="train/epoch_loss",  # Metric to monitor
@@ -56,7 +56,7 @@ def main():
     logger = TensorBoardLogger(save_dir=config["logger_dir"], log_graph=True, name=config['name'])
 
     model = Strawberry_lightning(config,
-                                 DataLoader(full_dataset, batch_size=config["batch_size"], shuffle=False, num_workers=0, persistent_workers=False))
+                                 DataLoader(full_dataset, batch_size=config["batch_size"], shuffle=False, num_workers=config["num_workers"], persistent_workers=config["num_workers"] > 0))
 
 
     trainer = L.Trainer(logger=logger,

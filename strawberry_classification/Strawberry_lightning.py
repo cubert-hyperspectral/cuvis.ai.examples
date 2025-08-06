@@ -83,7 +83,6 @@ class Strawberry_lightning(L.LightningModule):
         self.num_classes = config["num_classes"]
         self.model = FreshTwin2DUNet(in_channels=self.pca_channels, num_classes=self.num_classes, pca=self.pca)
 
-        # TODO: decide which metrics are relevant and remove some
         self.roc = ROC(task='multiclass', num_classes=config["num_classes"])
         self.auroc = AUROC(task='multiclass', num_classes=config["num_classes"])
         self.ap = AveragePrecision(task='multiclass', num_classes=config["num_classes"])

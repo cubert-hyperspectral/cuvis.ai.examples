@@ -42,7 +42,7 @@ class StrawberryCuvisDataset(Dataset):
         self.masks = {}
         for file_path in self.file_paths:
             self.masks[file_path] = file_path.parent / "masks" / (
-                        file_path.stem + "_0000_Strawberry_swir_fasterRGB_mask.npy")  # TODO: rename mask files and change here
+                        file_path.stem + "_0000_Strawberry_swir_fasterRGB_mask.npy")
         self.mean = mean
         self.std = std
         self.normalize = normalize
