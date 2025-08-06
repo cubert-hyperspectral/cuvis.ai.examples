@@ -22,7 +22,7 @@ num_workers: 19 # Number of workers to use for the torch.DataLoader
 
 ### MODEL ###
 seed: 42
-checkpoint_to_load: ./best_model_checkpoint.ckpt # path to the model checkpoint which should be used for interference
+checkpoint_to_load: ./strawberry_swir_unet.ckpt # path to the model checkpoint which should be used for interference
 
 ### REPORT ###
 create_images: false # whether to create inference and overlay images
