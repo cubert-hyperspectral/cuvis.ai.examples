@@ -10,15 +10,15 @@ white_path: "D:/FreshTwin/22_04_25_cleaned/session_009/swir/white_001.cu3s"
 dark_path: "D:/FreshTwin/22_04_25_cleaned/session_009/swir/dark_002.cu3s"
 pca_channels: 32
 cube_channels: 38
-cube_size: [200,200]
-sides_to_exclude: []
-days_to_exclude: [28]
-strawberry_range: [0,220]
-cube_rgb_channels: [4,12,25]
-mean: [1504.08246934, 1540.39793567, 1602.4489763, 1661.57167366, 1699.1504127, 1721.27634495, 1742.11812563, 1761.97307507, 1744.84085927, 1633.52649537, 1536.41526133, 1530.05090741, 1526.94128086, 1547.3282172, 1577.91786525, 1612.89907042, 1639.89776779, 1656.47145264, 1634.11501515, 1614.71364499, 1583.94336948, 1551.18958686, 1534.29518968, 1522.73705595, 1522.45648167, 1566.90468918, 1606.92703586, 1640.85408431, 1675.08095215, 1712.54181303, 1751.12086378, 1790.52679986, 1832.96328515, 1881.64647853, 1928.25683069, 1961.69749218, 1960.92781663, 1949.27640693]
-std: [1579.87830763, 1701.65675246, 1809.89026051, 1902.54284596, 1960.92999172, 1991.69891779, 2020.98494842, 2048.78818913, 1898.9642461, 1641.73992512, 1445.62863049, 1419.31747974, 1402.9295137, 1416.30544407, 1445.06210139, 1460.84868281, 1378.34365158, 1307.65508358, 1276.64620872, 1252.81980616, 1175.82817878, 1103.56226904, 1068.85424082, 1051.53816484, 1043.00623739, 1051.06200193, 1064.06870339, 1082.50130898, 1101.96712935, 1094.13451001, 1083.5181593, 1085.19525308, 1098.28109881, 1096.03917041, 1046.65973348, 991.18918201, 912.54571603, 843.24569666]
+cube_size: [ 200,200 ]
+sides_to_exclude: [ ]
+days_to_exclude: [ 28 ]
+strawberry_range: [ 0,220 ]
+cube_rgb_channels: [ 4,12,25 ]
+mean: [ ] # mean and std are neither used nor provided for this example. But you could calculate and use them to normalize the data.
+std: [ ]
 batch_size: 1
-num_workers: 19 # Number of workers to use for the torch.Dataloader
+num_workers: 19 # Number of workers to use for the torch.DataLoader
 
 ### MODEL ###
 seed: 42
@@ -27,7 +27,8 @@ checkpoint_to_load: ./best_model_checkpoint.ckpt # path to the model checkpoint 
 ### REPORT ###
 create_images: false # whether to create inference and overlay images
 plot_thresholds: [ 0.9, 0.0 ] # which thresholds to plot
-representations: {"RGB":[4,12,25]} # which channels to use for a representation, can be multiple lists of 3 channels [R,G,B]
+representations: { "RGB": [ 4,12,25 ] } # which channels to use for a representation, can be multiple lists of 3 channels [R,G,B]
+dip: 150 # dpi for the created images
 task: segmentation # which task the model is performing, This is needed in order to use the right functions. currently supports "segmentation" and "anomaly". Beware "anomaly" is not tested at the moment
-class_map: [Background, Strawberry, Bruise] # List of names for the labels. First name corresponds to label "0", second to label "1",...
-metrics_to_calc: [auroc, dice, per_class_dice] # which metrics to calculate, see the Enum in the Reporting class to find out which are implemented
+class_map: [ Background, Strawberry, Bruise ] # List of names for the labels. First name corresponds to label "0", second to label "1",...
+metrics_to_calc: [ auroc, dice, per_class_dice ] # which metrics to calculate, see the Enum in the Reporting class to find out which are implemented

@@ -76,7 +76,7 @@ the `inference.ipynb` notebook.
 ## How to create a report for the model and dataset
 
 You can use the `Report` class to create a report of the model performance and generate a visual representation of
-the outcome. An example usage is shown in `strawberry_reporting.py`.
+the outcome. An example usage is shown in `reporting.py`.
 The script will create a folder at a specified location, infer the given datasets, and create a visually pleasing
 output. Changing the folder, metrics or thresholds can be done in the ``example_report_config.yaml``. If the provided
 metrics don't suffice you can also just add your own following our examples.

@@ -14,7 +14,6 @@ from enum import Enum
 import matplotlib.patches as mpatches
 
 
-
 class Metrics(Enum):
     ROC = "auroc"
     DICE = "dice"
@@ -55,7 +54,7 @@ class Report:
         self.metrics_to_calc = config['metrics_to_calc'] if 'metrics_to_calc' in config else []
         self.create_images = config['create_images'] if 'create_images' in config else True
         self.class_map = config['class_map'] if 'class_map' in config else []
-        self.dpi = 150
+        self.dpi = config['dpi']
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def generate_report(self):
@@ -66,7 +65,11 @@ class Report:
 
         metrics = {}
         dataset_name = self.dataset_path.name
-        report_loader = DataLoader(self.dataset, batch_size=1, shuffle=False, num_workers=self.config["num_workers"], persistent_workers=self.config["num_workers"] > 0)
+        report_loader = DataLoader(self.dataset,
+                                   batch_size=1,
+                                   shuffle=False,
+                                   num_workers=self.config["num_workers"],
+                                   persistent_workers=self.config["num_workers"] > 0)
         predictions = self.trainer.predict(self.model, report_loader)
         target_folder = self.reporting_run_folder / dataset_name
         if not target_folder.is_dir():
@@ -100,8 +103,9 @@ class Report:
         for rep in self.config["representations"]:
             rgb_images[rep] = (image[:, :, self.config["representations"][rep]])
             rgb_images[rep] = rgb_images[rep] / rgb_images[rep].max()
-        nrows = int(len(rgb_images)/2) + len(self.plot_thresholds) + len(rgb_images)%2
-        fig_height = self.config["cube_size"][1] / self.dpi * 2 * (int(len(rgb_images) / 2) + 2 - len(rgb_images) % 2 + len(self.plot_thresholds)) * 1.5
+        nrows = int(len(rgb_images) / 2) + len(self.plot_thresholds) + len(rgb_images) % 2
+        fig_height = self.config["cube_size"][1] / self.dpi * 2 * (
+                    int(len(rgb_images) / 2) + 2 - len(rgb_images) % 2 + len(self.plot_thresholds)) * 1.5
         fig_width = self.config["cube_size"][0] / self.dpi * 6 + 2
         fig, ax = plt.subplots(nrows, 2, layout="constrained", dpi=self.dpi, figsize=(fig_width, fig_height))
         fig.legend(handles=patches, loc='lower center', ncol=self.num_classes, bbox_to_anchor=(0.5, -0.05))
@@ -114,9 +118,12 @@ class Report:
             ax[int(num / 2)][num % 2].set_title(i)
             ax[int(num / 2)][num % 2].set_visible(True)
 
-        ax[int(len(rgb_images) / 2)][len(rgb_images)%2].imshow(batch["mask"].squeeze().detach().cpu().numpy(), cmap=cmap, vmin=0, vmax=self.num_classes - 1)
-        ax[int(len(rgb_images) / 2)][len(rgb_images)%2].set_visible(True)
-        ax[int(len(rgb_images) / 2)][len(rgb_images)%2].set_title("Ground Truth")
+        ax[int(len(rgb_images) / 2)][len(rgb_images) % 2].imshow(batch["mask"].squeeze().detach().cpu().numpy(),
+                                                                 cmap=cmap,
+                                                                 vmin=0,
+                                                                 vmax=self.num_classes - 1)
+        ax[int(len(rgb_images) / 2)][len(rgb_images) % 2].set_visible(True)
+        ax[int(len(rgb_images) / 2)][len(rgb_images) % 2].set_title("Ground Truth")
         for num, threshold in enumerate(self.plot_thresholds):
             if task == "segmentation":
 
@@ -128,8 +135,10 @@ class Report:
                 threshold_img = torch.softmax(pred, dim=0)
                 threshold_img[threshold_img < threshold] = 0
                 threshold_img[threshold_img > threshold] = 1
-
-            num = num + int(len(rgb_images) / 2) + 2 - len(rgb_images)%2
+            else:
+                warnings.warn("create_inference_png does not support task {}".format(task))
+                break
+            num = num + int(len(rgb_images) / 2) + 2 - len(rgb_images) % 2
             ax[num][0].imshow(threshold_img, cmap=cmap, vmin=0, vmax=self.num_classes - 1)
             ax[num][0].set_title(f'Threshold image ({threshold})')
             ax[num][0].set_visible(True)

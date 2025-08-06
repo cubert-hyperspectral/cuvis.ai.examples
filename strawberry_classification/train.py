@@ -1,9 +1,9 @@
 import argparse
 import yaml
 import lightning as L
-from Strawberry_lightning import Strawberry_lightning
+from StrawberryLightning import StrawberryLightning
 from torch.utils.data import DataLoader
-from StrawberryDataset import StrawberryCuvisDataset
+from StrawberryDataset import StrawberryDataset
 from lightning.pytorch.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from pathlib import Path
@@ -27,23 +27,34 @@ def main():
     args = get_arguments()
     config = parse_args(args)
 
-    full_dataset = StrawberryCuvisDataset(Path(config["data_path"]),
-                                          white_path=config["white_path"],
-                                          dark_path=config["dark_path"],
-                                          cube_size=config["cube_size"],
-                                          strawberry_range=tuple(config["strawberry_range"]),
-                                          sides_to_exclude=config["sides_to_exclude"],
-                                          days_to_exclude=config["days_to_exclude"],
-                                          mean=config["mean"],
-                                          std=config["std"])
+    full_dataset = StrawberryDataset(Path(config["data_path"]),
+                                     white_path=config["white_path"],
+                                     dark_path=config["dark_path"],
+                                     cube_size=config["cube_size"],
+                                     strawberry_range=tuple(config["strawberry_range"]),
+                                     sides_to_exclude=config["sides_to_exclude"],
+                                     days_to_exclude=config["days_to_exclude"],
+                                     mean=config["mean"],
+                                     std=config["std"],
+                                     normalize=config["normalize"], )
 
     train_size = int(0.8 * len(full_dataset))
     test_size = len(full_dataset) - train_size
-    train_data, test_data = torch.utils.data.random_split(full_dataset, [train_size, test_size], generator=torch.Generator().manual_seed(config["seed"]))
+    train_data, test_data = torch.utils.data.random_split(full_dataset,
+                                                          [train_size, test_size],
+                                                          generator=torch.Generator().manual_seed(config["seed"]))
 
-    train_loader = DataLoader(train_data, batch_size=config["batch_size"], shuffle=True, num_workers=config["num_workers"], persistent_workers=config["num_workers"] > 0)
+    train_loader = DataLoader(train_data,
+                              batch_size=config["batch_size"],
+                              shuffle=True,
+                              num_workers=config["num_workers"],
+                              persistent_workers=config["num_workers"] > 0)
 
-    test_loader = DataLoader(test_data, batch_size=config["batch_size"], shuffle=False, num_workers=config["num_workers"], persistent_workers=config["num_workers"] > 0)
+    test_loader = DataLoader(test_data,
+                             batch_size=config["batch_size"],
+                             shuffle=False,
+                             num_workers=config["num_workers"],
+                             persistent_workers=config["num_workers"] > 0)
 
     checkpoint_callback = ModelCheckpoint(
         monitor="train/epoch_loss",  # Metric to monitor
@@ -55,9 +66,12 @@ def main():
     )
     logger = TensorBoardLogger(save_dir=config["logger_dir"], log_graph=True, name=config['name'])
 
-    model = Strawberry_lightning(config,
-                                 DataLoader(full_dataset, batch_size=config["batch_size"], shuffle=False, num_workers=config["num_workers"], persistent_workers=config["num_workers"] > 0))
-
+    model = StrawberryLightning(config,
+                                DataLoader(full_dataset,
+                                            batch_size=config["batch_size"],
+                                            shuffle=False,
+                                            num_workers=config["num_workers"],
+                                            persistent_workers=config["num_workers"] > 0))
 
     trainer = L.Trainer(logger=logger,
                         max_steps=config["max_steps"],
@@ -67,6 +81,7 @@ def main():
                         callbacks=[checkpoint_callback])
 
     trainer.fit(model, train_loader, test_loader)
+
 
 if __name__ == '__main__':
     main()

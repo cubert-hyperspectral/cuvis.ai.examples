@@ -6,7 +6,8 @@ import numpy as np
 import torch
 import cv2 as cv
 
-class StrawberryCuvisDataset(Dataset):
+
+class StrawberryDataset(Dataset):
     def __init__(self,
                  root_dir: Path,
                  mean: list = None,
@@ -18,7 +19,7 @@ class StrawberryCuvisDataset(Dataset):
                  cube_rgb_channels=None,
                  strawberry_range: tuple = (0, 220),
                  sides_to_exclude: list = None,
-                 days_to_exclude: list = None,):
+                 days_to_exclude: list = None, ):
         if days_to_exclude is None:
             days_to_exclude = [28]
         if sides_to_exclude is None:
@@ -35,14 +36,13 @@ class StrawberryCuvisDataset(Dataset):
                 if int(name_splits[2]) not in sides_to_exclude and int(name_splits[3]) not in days_to_exclude:
                     self.file_paths.append(path)
 
-
         self.images = [[file_path, index]
                        for file_path in self.file_paths
                        for index in range(len(cuvis.SessionFile(file_path)))]
         self.masks = {}
         for file_path in self.file_paths:
             self.masks[file_path] = file_path.parent / "masks" / (
-                        file_path.stem + "_0000_Strawberry_swir_fasterRGB_mask.npy")
+                    file_path.stem + "_0000_Strawberry_swir_fasterRGB_mask.npy")
         self.mean = mean
         self.std = std
         self.normalize = normalize
@@ -82,6 +82,13 @@ class StrawberryCuvisDataset(Dataset):
         rgb[1] = cube[self.cube_rgb_channels[1]]
         rgb[2] = cube[self.cube_rgb_channels[2]]
 
-        mask = torch.tensor(cv.resize(np.load(self.masks[file_path]),(self.height, self.width),interpolation=cv.INTER_NEAREST), device="cuda")
+        mask = torch.tensor(cv.resize(np.load(self.masks[file_path]), (self.height, self.width), interpolation=cv.INTER_NEAREST), device="cuda")
 
-        return {"image": cube, "mask": mask, "number": file_name[1], "side": file_name[2], "day": file_name[3], "rgb_image": rgb, "name": file_path.stem}
+        return {
+            "image": cube,
+            "mask": mask,
+            "number": file_name[1],
+            "side": file_name[2],
+            "day": file_name[3],
+            "rgb_image": rgb,
+            "name": file_path.stem}

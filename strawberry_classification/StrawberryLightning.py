@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 
 class GeneralizedDiceLoss(torch.nn.Module):
-    def __init__(self, epsilon=1e-6, generalize=False,mode = None):
+    def __init__(self, epsilon=1e-6, generalize=False, mode=None):
         super(GeneralizedDiceLoss, self).__init__()
         self.epsilon = epsilon
         self.generalize = generalize
@@ -53,7 +53,7 @@ class GeneralizedDiceLoss(torch.nn.Module):
         if self.mode == "advanced":
             gt_sum = targets_flat.sum(-1)  # [B, C]
             class_weights = 1.0 / (gt_sum ** 2 + self.epsilon)  # [B, C]
-        else :
+        else:
             class_weights = torch.tensor([0, 1, 1], device="cuda")  # [B, C]
 
         # Numerator and denominator
@@ -72,7 +72,8 @@ class GeneralizedDiceLoss(torch.nn.Module):
 
         return loss.mean()
 
-class Strawberry_lightning(L.LightningModule):
+
+class StrawberryLightning(L.LightningModule):
     def __init__(self, config, data_loader):
         super().__init__()
         self.pca_channels = config["pca_channels"]
@@ -124,11 +125,9 @@ class Strawberry_lightning(L.LightningModule):
                 pca_image = batch["image"].squeeze(0).permute(1, 2, 0).reshape(-1, self.cube_channels)
                 self.pca.partial_fit(pca_image)
 
-
     def training_step(self, batch, batch_idx):
         res = self.model.forward(batch["image"])
         pred = torch.softmax(res, dim=0)
-
 
         one_hot_gt = torch.nn.functional.one_hot(batch["mask"].type(torch.long), num_classes=self.num_classes).movedim(-1, 1)
 
@@ -198,7 +197,6 @@ class Strawberry_lightning(L.LightningModule):
         self.iou3.update(prediction > 0.3, gt_mask)
         self.iou4.update(prediction > 0.4, gt_mask)
         self.iou5.update(prediction > 0.5, gt_mask)
-
 
         self.ap.update(res.unsqueeze(0), gt_mask)
 
