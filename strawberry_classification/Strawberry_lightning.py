@@ -3,7 +3,7 @@ import itertools
 import lightning as L
 import torchvision.transforms
 
-from UNet_2D import FreshTwin2DUNet
+from UNet import FreshTwin2DUNet
 import torch
 from torchmetrics.segmentation import DiceScore, MeanIoU
 from torchmetrics.classification import AveragePrecision, Accuracy, ROC, AUROC

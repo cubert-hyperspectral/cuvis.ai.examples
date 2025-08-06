@@ -3,7 +3,7 @@ import yaml
 import lightning as L
 from Strawberry_lightning import Strawberry_lightning
 from torch.utils.data import DataLoader
-from StrawberryCuvisDataset import StrawberryCuvisDataset
+from StrawberryDataset import StrawberryCuvisDataset
 from lightning.pytorch.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from pathlib import Path

@@ -6,7 +6,7 @@ import argparse
 import lightning as L
 from pathlib import Path
 from Strawberry_lightning import Strawberry_lightning
-from StrawberryCuvisDataset import StrawberryCuvisDataset
+from StrawberryDataset import StrawberryCuvisDataset
 
 def get_arguments():
     parser = argparse.ArgumentParser()

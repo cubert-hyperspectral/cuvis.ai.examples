@@ -75,8 +75,8 @@ the `inference.ipynb` notebook.
 
 ## How to create a report for the model and dataset
 
-You can use the `report.py` in order to create a report of the model performance and generate a visual representation of
-the outcome.
+You can use the `Report` class to create a report of the model performance and generate a visual representation of
+the outcome. An example usage is shown in `strawberry_reporting.py`.
 The script will create a folder at a specified location, infer the given datasets, and create a visually pleasing
 output. Changing the folder, metrics or thresholds can be done in the ``example_report_config.yaml``. If the provided
 metrics don't suffice you can also just add your own following our examples.
@@ -87,15 +87,18 @@ reporting.py -c example_report_config.yaml
 
 ## Results !!!THIS NEEDS TO BE REDONE !!!
 
-With the given model weights and dataset, we reached a 0.93 image-AUROC and a 0.91 pixel-AUROC. Most of the anomalies
-were detected correctly, only some were hardly detectable by the model.
+With the given model weights and dataset, we reached a 0.995 Pixel-AUROC and a 0.988 Dice. The model has an easy time
+differentiating between the background and the strawberries. In some cases it struggles with finding the bruises on an
+otherwise good fruit. And on some Strawberries which are supposed to be either completely bruised or bruise free, the
+model detects spots of unbruised or bruised strawberry respectively. This behaviour is somewhat expected, since we
+cannot provide a 100% valid ground truth for all the strawberries, the required effort is not feasible.
 
-![inference ROC](README_images/AUROC_Class.jpg)
-Inference ROC over all classes present in our validation dataset.
+![inference ROC](README_images/auroc.png)
+Inference ROC for all 3 classes separately using a one vs rest approach.
 
-![inference result](README_images/inference.jpg)
-Here we can see a detection result for an image with mixed PLA cubes ranging in size and color. We can see that the
-bigger cubes are easily detected, while the smallest cubes (2mm) are only detected with higher thresholds. Also for
-black PLA only the edges of the cube are detected.
+![inference result](README_images/model_output.jpg)
+Here we can see segmentation results for the three different cases present in out dataset. The first 100 strawberries
+are should all be completely bruise free and are labeled as such. Strawberries 101 through 200 are completely bruised
+and the last 20 strawberries have a small bruise labeled. We can see these cases in this order from left to right.
 
-Both images were created by the `report.py` script.
+Both images were created by using the `Report` class.
