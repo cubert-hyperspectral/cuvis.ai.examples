@@ -1,13 +1,13 @@
-name: final_model # name of the report
+name: example_report_name # name of the report
 
 ### DATASET ###
-data_path: D:/FreshTwin/swir
+data_path: ..data/data/strawberry_dataset/swir
 normalize: False # whether to normalize the data or not before putting it through the network
 channels: ALL # which channels to use, 'ALL' for 6 channel models, 'RGB' or 'SWIR' for 3 channel models
 max_img_shape: 1000 # make this the same size the model was trained with
 num_classes: 3
-white_path: "D:/FreshTwin/22_04_25_cleaned/session_009/swir/white_001.cu3s"
-dark_path: "D:/FreshTwin/22_04_25_cleaned/session_009/swir/dark_002.cu3s"
+white_path: "../data/Strawberry/swir_dataset/ref/white_001.cu3s"
+dark_path: "../data/Strawberry/swir_dataset/ref/dark_002.cu3s"
 pca_channels: 32
 cube_channels: 38
 cube_size: [ 200,200 ]
