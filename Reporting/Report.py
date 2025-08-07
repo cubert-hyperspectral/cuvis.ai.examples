@@ -54,8 +54,12 @@ class Report:
         self.metrics_to_calc = config['metrics_to_calc'] if 'metrics_to_calc' in config else []
         self.create_images = config['create_images'] if 'create_images' in config else True
         self.class_map = config['class_map'] if 'class_map' in config else []
-        self.dpi = config['dpi']
+        self.dpi = config['dpi'] if 'dpi' in config else 150
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.num_workers = config['num_workers'] if 'num_workers' in config else 0
+        self.representations = config['representations'] if 'representations' in config else []
+        self.cube_size = config['cube_size'] if 'cube_size' in config else [200,200]
+        self.batch_size = config['batch_size'] if 'batch_size' in config else 1
 
     def generate_report(self):
         if not os.path.exists(self.reporting_run_folder):
@@ -66,10 +70,10 @@ class Report:
         metrics = {}
         dataset_name = self.dataset_path.name
         report_loader = DataLoader(self.dataset,
-                                   batch_size=1,
+                                   batch_size=self.batch_size,
                                    shuffle=False,
-                                   num_workers=self.config["num_workers"],
-                                   persistent_workers=self.config["num_workers"] > 0)
+                                   num_workers=self.num_workers,
+                                   persistent_workers=self.num_workers > 0)
         predictions = self.trainer.predict(self.model, report_loader)
         target_folder = self.reporting_run_folder / dataset_name
         if not target_folder.is_dir():
@@ -100,15 +104,17 @@ class Report:
         colors = [base_cmap(i) for i in range(self.num_classes)]
         cmap = ListedColormap(colors)
         patches = [mpatches.Patch(color=colors[i], label=self.class_map[i]) for i in range(self.num_classes)]
-        for rep in self.config["representations"]:
-            rgb_images[rep] = (image[:, :, self.config["representations"][rep]])
+        for rep in self.representations:
+            rgb_images[rep] = (image[:, :, self.representations[rep]])
             rgb_images[rep] = rgb_images[rep] / rgb_images[rep].max()
         nrows = int(len(rgb_images) / 2) + len(self.plot_thresholds) + len(rgb_images) % 2
-        fig_height = self.config["cube_size"][1] / self.dpi * 2 * (
+        fig_height = self.cube_size[1] / self.dpi * 2 * (
                     int(len(rgb_images) / 2) + 2 - len(rgb_images) % 2 + len(self.plot_thresholds)) * 1.5
-        fig_width = self.config["cube_size"][0] / self.dpi * 6 + 2
+        fig_width = self.cube_size[0] / self.dpi * 6 + 2
         fig, ax = plt.subplots(nrows, 2, layout="constrained", dpi=self.dpi, figsize=(fig_width, fig_height))
+        fig.suptitle(batch["name"][0], fontsize=18, y=1.025)
         fig.legend(handles=patches, loc='lower center', ncol=self.num_classes, bbox_to_anchor=(0.5, -0.05))
+
         for axis in ax.flat:
             axis.set_visible(False)
             axis.get_xaxis().set_visible(False)
@@ -190,8 +196,8 @@ class Report:
             one_hot_gt = torch.nn.functional.one_hot(batch["mask"].type(torch.long), num_classes=self.num_classes).movedim(-1, 1)
             dice_func.update(one_hot_pred, one_hot_gt)
             diff = one_hot_gt != one_hot_pred.to(self.device)
-            sum = torch.sum(diff)
-            cum_sum = cum_sum + sum
+            dice_sum = torch.sum(diff)
+            cum_sum = cum_sum + dice_sum
             total_sum = total_sum + one_hot_pred.numel()
 
         dice_score = dice_func.compute()
