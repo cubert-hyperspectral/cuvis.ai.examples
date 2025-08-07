@@ -1,4 +1,4 @@
-data_path: ../data/trawberry_dataset/swir
+data_path: ../data/strawberry_dataset/swir
 batch_size: 1
 name: example_train_name # name of this training run
 ckpt_dir: ../data/ckpts # directory to save the checkpoints to
