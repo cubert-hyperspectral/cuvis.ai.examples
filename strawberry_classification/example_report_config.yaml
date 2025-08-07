@@ -25,10 +25,10 @@ seed: 42
 checkpoint_to_load: ./strawberry_swir_unet.ckpt # path to the model checkpoint which should be used for interference
 
 ### REPORT ###
-create_images: false # whether to create inference and overlay images
+create_images: true # whether to create inference and overlay images
 plot_thresholds: [ 0.9, 0.0 ] # which thresholds to plot
 representations: { "RGB": [ 4,12,25 ] } # which channels to use for a representation, can be multiple lists of 3 channels [R,G,B]
-dip: 150 # dpi for the created images
+dpi: 150 # dpi for the created images
 task: segmentation # which task the model is performing, This is needed in order to use the right functions. currently supports "segmentation" and "anomaly". Beware "anomaly" is not tested at the moment
 class_map: [ Background, Strawberry, Bruise ] # List of names for the labels. First name corresponds to label "0", second to label "1",...
 metrics_to_calc: [ auroc, dice, per_class_dice ] # which metrics to calculate, see the Enum in the Reporting class to find out which are implemented
