@@ -1,6 +1,6 @@
 data_path: ../data/trawberry_dataset/swir
 batch_size: 1
-name: fancy_name
+name: example_train_name # name of this training run
 ckpt_dir: ../data/ckpts # directory to save the checkpoints to
 logger_dir: ../data/logs # directory to save the logs / tensorboard files to
 max_steps: 200000
