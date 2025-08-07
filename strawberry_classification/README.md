@@ -4,11 +4,11 @@
 
 In this example, we used a UNet model to find bruised and unbruised areas in Strawberries.
 Since cuvis.ai was not yet ready to train models with, it had to be done separately. But we provide a notebook which
-walks you through how to load an externally trained deep neural network and use it to infer a datacube
+walks you through how to load an externally trained deep neural network and use it to infer a datacube.
 
 ## The dataset
 
-In our example dataset we used the cubert SWIR-1 camera wich creates 38 channel cubes. They range from 900nm up to
+In our example dataset we used the cubert SWIR-1 camera which creates 38 channel cubes. They range from 900nm up to
 1646nm.
 
 The dataset is aimed at food inspection problems. Approximately 450 Strawberries were harvested on a farm near Ulm and
@@ -24,29 +24,38 @@ Therefore we can identify the side of the strawberry at any time and can compare
 the five days of the data acquisition campaign.
 
 All the SWIR images are labeled. These labels are to be taken with a little caveat: We used an RGB representation of
-the data to label the data using Segment Anything and only fine-tuned the labels afterwards. To simplify the labeling
+the data to label the data using Segment Anything and only fine-tuned the labels afterward. To simplify the labeling
 process and decrease time spent, we assumed that all 100 non-treated fruits are completely bruise free and the 100
 vacuum treated strawberries consist of only bruised material. This simplification leads to some errors in the ground
 truth and therefore spikes in the loss of our model where it predicts bruising on "good" strawberries (and might even be
 right about it).
+
+![possibly wrong groundtruth](README_images/wrong_ground_truth.jpg)
+
+This image showcases the problem and the power of SWIR imaging for food inspection. We could not detect any bruise on
+this fruit in our manual inspection, but we can clearly see them in the RGB representation of our SWIR data cube. This
+leads to "miss classification" by the model in areas where it is most likely right.
+
 The last 20 strawberries of the dataset are the ones treated with the steel ball. They have also been labeled more
 thoroughly using an early version of our model to try and find all bruises (not only the ones inflicted by us).
 In the file ``dataset_notes.md`` you can find the notes on which of the bruises on these 20 fruits was inflicted using
 the steel ball.
 
 The dataset and pretrained model weights can be
-downloaded [here](https://drive.google.com/drive/folders/1bTNNSiFBQdPLgFlt3DHt06KmShmeTftj?usp=drive_link). !!!!!!!!
-UPDATE THIS LINK !!!!!!!!
+downloaded [here](https://drive.google.com/drive/folders/1K8n2XCAPAHpOrFawpRMGSC-KRHSbTqbf?usp=sharing). The datacubes
+are named by the following scheme: "Strawberry_NUMBER_SIDE_DATE.cu3s". The NUMBER refers to the number that was given to
+the Strawberry (1-220), SIDE is the side of the strawberry which is visible in this image and the date is the day of
+acquisition.
 
 ## Model
 
 We chose to go with the [UNet](https://arxiv.org/pdf/1505.04597) model since it is a proven, simple and good
 performing segmentation tool that is also applicable for hyperspectral data.
 
-Our implementation consists of 4 pooling and upconvolution layers. We trained our model with only three classes since
-the mold class is very underrepresented in our dataset and did not increase our classification result. We therefore
-dropped the class and excluded the last day of data acquisition since it was the only day when some strawberries were
-moldy.
+Our implementation consists of 4 stages consisting of convolution and pooling or upconvolution. We trained our model
+with only three classes since the mold class is very underrepresented in our dataset and did not increase our
+classification result. We therefore dropped the class and excluded the last day of data acquisition since it was the
+only day when some strawberries were moldy.
 
 ## Prerequisite
 
@@ -85,20 +94,21 @@ metrics don't suffice you can also just add your own following our examples.
 reporting.py -c example_report_config.yaml
 ```
 
-## Results !!!THIS NEEDS TO BE REDONE !!!
+## Results
 
 With the given model weights and dataset, we reached a 0.995 Pixel-AUROC and a 0.988 Dice. The model has an easy time
 differentiating between the background and the strawberries. In some cases it struggles with finding the bruises on an
 otherwise good fruit. And on some Strawberries which are supposed to be either completely bruised or bruise free, the
 model detects spots of unbruised or bruised strawberry respectively. This behaviour is somewhat expected, since we
-cannot provide a 100% valid ground truth for all the strawberries, the required effort is not feasible.
+cannot provide a 100% valid ground truth for all the strawberries.
 
 ![inference ROC](README_images/auroc.png)
+
 Inference ROC for all 3 classes separately using a one vs rest approach.
 
 ![inference result](README_images/model_output.jpg)
 Here we can see segmentation results for the three different cases present in out dataset. The first 100 strawberries
-are should all be completely bruise free and are labeled as such. Strawberries 101 through 200 are completely bruised
+should all be completely bruise free and are labeled as such. Strawberries 101 through 200 are completely bruised
 and the last 20 strawberries have a small bruise labeled. We can see these cases in this order from left to right.
 
-Both images were created by using the `Report` class.
+All images were created by using the `Report` class.
