@@ -7,3 +7,6 @@ numpy
 Pillow
 torchvision
 tqdm
+ipympl
+ipython
+ipykernel
