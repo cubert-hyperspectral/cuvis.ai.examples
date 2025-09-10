@@ -10,3 +10,4 @@ tqdm
 ipympl
 ipython
 ipykernel
+tzdata
