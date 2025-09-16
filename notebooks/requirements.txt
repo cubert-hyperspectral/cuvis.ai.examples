@@ -1,0 +1,13 @@
+cuvis
+cuvis_ai
+ipython
+ipywidgets
+matplotlib
+numpy
+Pillow
+torchvision
+tqdm
+ipympl
+ipython
+ipykernel
+tzdata
