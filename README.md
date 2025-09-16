@@ -4,7 +4,7 @@
 
 ## Prerequisites
 To run any of these examples, you need to have cuvis.ai installed in your environment. Please refer to the [cuvis.ai installation instructions](https://github.com/cubert-hyperspectral/cuvis.ai?tab=readme-ov-file#installation) to do so.
-Please be also aware, that some examples might have their own prerequisites which can be found in the respective README.md.
+Please be also aware, that some examples might have their own prerequisites which can be found in the respective `README.md` and `requirements.txt`
 ## Inventory
 For each example pretrained model weights, an extensive dataset and a step-by-step guide are provided.
 
